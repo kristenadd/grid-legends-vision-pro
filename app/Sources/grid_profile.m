@@ -7,7 +7,9 @@
 // The game's main bundle (libglcf, libglfoundation) is that folder: GL_BUNDLE_PATH.
 // Its settings: Library/Application Support/Feral Interactive/GRIDLegends/Preferences Data (Feral's registry XML).
 // Before the first launch it is seeded so the Mac-only pre-game launcher and its consent prompts never open; usage
-// data and crash reports are declined. An existing file keeps everything but the launcher switch.
+// data and crash reports are declined; and the game starts on Feral's Low preset at 1280x720 (ShouldLoadDefaultPreset 0:
+// the detected "high" preset ran out of the app's ~8 GB loading a race; Low peaks at ~6.9 GB in a race). The settings
+// can be raised in the game's options. An existing file keeps everything but the launcher switch.
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
 #include <execinfo.h>
@@ -47,12 +49,37 @@ static NSString *const kSeed =
      "        <key name=\"Software\">\n"
      "            <key name=\"Feral Interactive\">\n"
      "                <key name=\"GRIDLegends\">\n"
+     "                    <key name=\"GraphicsSettings\">\n"
+     "                        <value name=\"AmbientOcclusion\" type=\"integer\">0</value>\n"
+     "                        <value name=\"AntiAliasing\" type=\"integer\">1</value>\n"
+     "                        <value name=\"Crowds\" type=\"integer\">0</value>\n"
+     "                        <value name=\"GroundCover\" type=\"integer\">0</value>\n"
+     "                        <value name=\"LODQuality\" type=\"integer\">0</value>\n"
+     "                        <value name=\"LightingQuality\" type=\"integer\">0</value>\n"
+     "                        <value name=\"Mirrors\" type=\"integer\">0</value>\n"
+     "                        <value name=\"Particles\" type=\"integer\">0</value>\n"
+     "                        <value name=\"PostProcess\" type=\"integer\">0</value>\n"
+     "                        <value name=\"ScreenSpaceReflections\" type=\"integer\">0</value>\n"
+     "                        <value name=\"Shadows\" type=\"integer\">0</value>\n"
+     "                        <value name=\"Skidmarks\" type=\"integer\">0</value>\n"
+     "                        <value name=\"SmokeShadows\" type=\"integer\">0</value>\n"
+     "                        <value name=\"TextureQuality\" type=\"integer\">0</value>\n"
+     "                        <value name=\"VehicleReflections\" type=\"integer\">0</value>\n"
+     "                        <value name=\"VolumetricLights\" type=\"integer\">0</value>\n"
+     "                        <value name=\"WeatherEffects\" type=\"integer\">0</value>\n"
+     "                    </key>\n"
      "                    <key name=\"Setup\">\n"
      "                        <value name=\"AllowSendCrashReports\" type=\"integer\">0</value>\n"
      "                        <value name=\"AllowSendUsageData\" type=\"integer\">0</value>\n"
      "                        <value name=\"GameOptionsDialogShouldShow\" type=\"integer\">0</value>\n"
      "                        <value name=\"GameOptionsDialogShown\" type=\"integer\">1</value>\n"
+     "                        <value name=\"ShouldLoadDefaultPreset\" type=\"integer\">0</value>\n"
      "                        <value name=\"SoftwareUpdatedAskedUser\" type=\"integer\">1</value>\n"
+     "                        <key name=\"Apple M2 GPU\">\n"
+     "                            <value name=\"FullScreen\" type=\"integer\">1</value>\n"
+     "                            <value name=\"ScreenW\" type=\"integer\">1280</value>\n"
+     "                            <value name=\"ScreenH\" type=\"integer\">720</value>\n"
+     "                        </key>\n"
      "                        <key name=\"SpecificationAlerts\">\n"
      "                            <value name=\"DocsAndControlsSelectedPadsNoMouse\" type=\"integer\">1</value>\n"
      "                        </key>\n"
@@ -162,9 +189,20 @@ void *grid_metal_layer(void) {
 // (the floating window can be resized: the game's layer follows the window's view; added to host.m's
 //  VXMacRootController at load, since that class is generated from VXpro's source)
 #import <UIKit/UIKit.h>
+#import <GameController/GameController.h>
 static void grid_layout(UIViewController *self, SEL _cmd) {
     for (CALayer *l in self.view.layer.sublayers)
         if ([l isKindOfClass:[CAMetalLayer class]]) l.frame = self.view.bounds;
+    // (visionOS turns a controller's buttons into pinches on the view you look at unless the view says it takes
+    //  controller input itself: then every button goes to GameController only, and on to the game's virtual pad)
+    BOOL has = NO;
+    for (id<UIInteraction> i in self.view.interactions) if ([i isKindOfClass:[GCEventInteraction class]]) has = YES;
+    if (!has) {
+        GCEventInteraction *gi = [GCEventInteraction new];
+        gi.handledEventTypes = GCUIEventTypeGamepad;
+        [self.view addInteraction:gi];
+        vxmac_log("GRID: the window's game view takes controller input (GCEventInteraction)");
+    }
 }
 __attribute__((constructor)) static void grid_window_layout(void) {
     Class c = objc_getClass("VXMacRootController");

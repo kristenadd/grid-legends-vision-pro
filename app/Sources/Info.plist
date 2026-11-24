@@ -28,7 +28,7 @@
 		</dict>
 	</array>
 	<key>GCSupportsControllerUserInteraction</key>
-	<true/>
+	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSHandsTrackingUsageDescription</key>

@@ -130,7 +130,7 @@ In-race memory is still to be measured.
   memory under the ~8 GB limit with the Increased Memory Limit entitlement.
 - Keyboard/mouse via GameController → libvxkit events works already (VXpro).
 
-### Phase 3 — Gamepads (~1–2 weeks, the biggest new piece)
+### Phase 3 — Gamepads — **done 2026-11-23** ([notes](docs/PHASE3.md))
 
 Target: any controller visionOS pairs over Bluetooth and exposes through GameController
 (`GCController.extendedGamepad`): Xbox Wireless, DualSense/DualShock 4, MFi pads.
@@ -180,19 +180,19 @@ Virtual Addressing). Game files never go in git or releases.
 |---|---|---|
 | Feral activation blocks startup | **Solved in Phase 1** with your own unmodified receipt in the redirected bundle ([details](docs/PHASE1.md)); without it `_Exit(173)` | Copy the receipt with the data in Phase 2; never patch or spoof licence checks |
 | Feral pre-game launcher (AppKit + WebKit) | Certain | Seed `GameOptionsDialogShouldShow = 0` before first launch |
-| IOHID-only controller support | Certain | Virtual HID pad (Phase 3) |
+| IOHID-only controller support | Solved (Phase 3) | Virtual HID pad; the window claims controller input |
 | Run-time-only AppKit/Feral UI calls (alerts, launcher-style dialogs, WebView UI) | High | libvxkit catch-all logs; implement what is hit |
 | StoreKit DLC/IAP ownership and CloudKit saves unavailable after re-signing | High | Base game offline; saves local only |
 | Online multiplayer / EA services | High | Expect offline only at first |
 | Mac binary archives incompatible on M2 headset | Medium | Disable them, let Metal compile |
-| Memory over the ~8 GB limit | Low–medium | Lowest textures; reservation check in Phase 0 |
+| Memory over the ~8 GB limit | **Hit in Phase 3** (high preset, loading a race) | Low preset at 1280x720 seeded: ~6.9 GB in a race |
 
 ## 5. Milestones
 
 1. Converted dylib loads on the Mac (`dyhost_mac`) — **end of Phase 0**
 2. `check_imports`: 0 missing; game reaches startup in the simulator
 3. Main menu on the headset in a panel — **title screen reached 2026-11-23** ([Phase 2](docs/PHASE2.md))
-4. A full race with a gamepad and sound — **playable**
+4. A full race with a gamepad and sound — **playable** (**a race runs on the headset 2026-11-23**, Low preset at 1280x720, [Phase 3](docs/PHASE3.md))
 5. One-command setup tool and guide
 
 Out of scope for now: stereo 3D, head-tracked camera, steering wheels.

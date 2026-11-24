@@ -57,8 +57,8 @@ $(OUT)/libglappsvc.dylib $(OUT)/libglsbridge.dylib: glsmall.m | vxpro
 $(OUT)/libglsystem.dylib: glsystem.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glsystem.c -o $@ -Wl,-reexport_library,$(OUT)/libvxsystem.dylib $(KIT)
 
-$(OUT)/libgliokit.dylib: gliokit.c glcommon.h $(KITLIB)
-	$(CC) $(CFLAGS) $(DY) gliokit.c -o $@ -Wl,-reexport_library,$(OUT)/libvxiokit.dylib -framework IOKit -framework CoreFoundation $(KIT)
+$(OUT)/libgliokit.dylib: gliokit.c glhid.m glcommon.h $(KITLIB)
+	$(CC) $(CFLAGS) $(DY) gliokit.c glhid.m -o $@ -Wl,-reexport_library,$(OUT)/libvxiokit.dylib -framework IOKit -framework CoreFoundation -framework Foundation -framework GameController $(KIT)
 
 $(OUT)/libglwebkit.dylib: glwebkit.m glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glwebkit.m -o $@ -Wl,-reexport_framework,WebKit -framework Foundation $(KIT)
