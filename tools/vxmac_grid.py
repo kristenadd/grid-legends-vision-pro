@@ -3,7 +3,7 @@
 
     tools/vxmac_grid.py prepare --team <TEAMID> [--game /Applications/GRIDLegends.app] [--bundle-id <id>] [--device <id>]
                                 the shims and the game's executable as a visionOS work copy; settings -> build/grid/config.json
-    tools/vxmac_grid.py build   [--loading capture | --splash image]  the host app signed with YOUR team, the work copy embedded
+    tools/vxmac_grid.py build   [--splash image|title]  the host app signed with YOUR team, the work copy embedded
     tools/vxmac_grid.py install devicectl device install app (an update keeps the app's data: never uninstall)
     tools/vxmac_grid.py copy    the game's Info.plist, receipt and Resources (34 GB) into the app's container (resumable)
     tools/vxmac_grid.py launch  [--restart] [--present window|immersive] [--env NAME=VALUE ...]
@@ -20,7 +20,7 @@ bundle is only read. Your receipt is copied unchanged: the game's activation nee
 NEVER uninstall GRID Legends Host and never install with --remove-existing-content: that deletes its container, the
 copy of the game's data and your saves in it.
 """
-import argparse, json, os, re, subprocess, sys, tempfile, time
+import argparse, json, os, re, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(HERE, 'build', 'grid')
@@ -85,12 +85,12 @@ def cmd_build(a):
     icns = os.path.join(c['game'], 'Contents', 'Resources', 'GameIcon.icns')
     if os.path.exists(icns):  # the home-screen icon, made from the game's own (into build/, never into git)
         run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'make_icon.swift'), icns, os.path.join(WORK, 'Assets.xcassets')])
-    # the window's splash until the first video (app/Sources/grid_splash.m), into build/ (remembered in the config):
-    #   --loading CAPTURE  a capture of the title screen (burst --step 1 --frames 1): "LOADING" in place of "PRESS (A)"
-    #   --splash IMAGE     any image, with "Loading..." under it
-    if a.loading: c['loading'] = os.path.abspath(a.loading); c.pop('splash', None)
-    if a.splash: c['splash'] = os.path.abspath(a.splash); c.pop('loading', None)
-    if a.loading or a.splash: json.dump(c, open(CONFIG, 'w'), indent=1)
+    # the window's splash until the first video (app/Sources/grid_splash.m), into build/:
+    #   by default the game's own title screen, "LOADING" in place of "PRESS (A)" (tools/make_loading.swift)
+    #   --splash IMAGE     any image instead, with "Loading..." under it (remembered in the config; --splash title: back)
+    if a.splash == 'title': c.pop('splash', None)
+    elif a.splash: c['splash'] = os.path.abspath(a.splash)
+    if a.splash or 'loading' in c: c.pop('loading', None); json.dump(c, open(CONFIG, 'w'), indent=1)
     cat = os.path.join(WORK, 'Assets.xcassets')
     def imageset(name, png):
         if not os.path.exists(os.path.join(cat, 'Contents.json')):
@@ -99,14 +99,14 @@ def cmd_build(a):
         run(['sips', '-s', 'format', 'png', '--resampleWidth', '1920', png, '--out', os.path.join(iset, name + '.png')])
         json.dump({'images': [{'filename': name + '.png', 'idiom': 'universal'}], 'info': {'author': 'xcode', 'version': 1}},
                   open(os.path.join(iset, 'Contents.json'), 'w'))
-    if c.get('loading'):
-        if not os.path.exists(c['loading']): sys.exit('--loading: no such capture: %s' % c['loading'])
-        out = os.path.join(WORK, 'loading')
-        run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'make_loading.swift'), c['game'], c['loading'], out])
-        imageset('Splash', os.path.join(out, 'Splash.png')); imageset('SplashText', os.path.join(out, 'SplashText.png'))
-    elif c.get('splash'):
+    if c.get('splash'):
         if not os.path.exists(c['splash']): sys.exit('--splash: no such image: %s' % c['splash'])
         imageset('Splash', c['splash'])
+        shutil.rmtree(os.path.join(cat, 'SplashText.imageset'), ignore_errors=True)
+    else:
+        out = os.path.join(WORK, 'loading')
+        run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'make_loading.swift'), c['game'], out])
+        imageset('Splash', os.path.join(out, 'Splash.png')); imageset('SplashText', os.path.join(out, 'SplashText.png'))
     appdir = os.path.join(HERE, 'app')
     run(['xcodegen'], cwd=appdir)
     run(['xcodebuild', '-project', 'GRIDHost.xcodeproj', '-scheme', 'GRIDHost', '-destination', 'generic/platform=visionOS',
@@ -303,8 +303,8 @@ def main():
     sp = ap.add_subparsers(dest='cmd', required=True)
     p = sp.add_parser('prepare'); p.add_argument('--game', default='/Applications/GRIDLegends.app'); p.add_argument('--team')
     p.add_argument('--bundle-id'); p.add_argument('--device')
-    p = sp.add_parser('build'); p.add_argument('--splash', help='an image for the window while the game starts (remembered)')
-    p.add_argument('--loading', help='a capture of the title screen: the splash says LOADING in its place (remembered)')
+    p = sp.add_parser('build'); p.add_argument('--splash', help='an image for the window while the game starts instead of the '
+                                               'title screen (remembered; "title" goes back to the title screen)')
     p = sp.add_parser('burst'); p.add_argument('--tag'); p.add_argument('--wait', type=int, default=10)
     p.add_argument('--step', type=int, default=2, help='every Nth frame'); p.add_argument('--frames', type=int, default=120)
     p = sp.add_parser('pref'); p.add_argument('--set', action='append', default=[]); p.add_argument('--show')

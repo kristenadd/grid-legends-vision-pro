@@ -1,14 +1,17 @@
-// make_loading.swift: the window's loading screen from a capture of the game's title screen ("PRESS (A)" under the
-// logo), at build time, into build/ (the game's artwork never goes into git).
+// make_loading.swift: the window's loading screen, made from the game's own title screen at build time, into build/
+// (the game's artwork never goes into git). Nothing but the installed game is needed, so it can always be made again.
 //
-//   swift tools/make_loading.swift /Applications/GRIDLegends.app title.png OUT_DIR
+//   swift tools/make_loading.swift /Applications/GRIDLegends.app OUT_DIR
 //
-//   OUT_DIR/Splash.png      the title screen with "PRESS (A)" taken out (filled in from the four sides around it)
-//   OUT_DIR/SplashText.png  "LOADING" where "PRESS" was, transparent around it, in the game's own Roboto Condensed: the
+//   OUT_DIR/Splash.png      the title screen's background, 1920x1080: Data/data_win/ui_package/textures/press_start_screen/
+//                           grid_legends_concept_bg.tif.erp (an ERP package, zstd: a 3840x2160 BC7 surface, read with
+//                           ImageIO as a DDS). The logo is in the picture; the game draws "PRESS (A)" over it.
+//   OUT_DIR/SplashText.png  "LOADING" where "PRESS" goes, transparent around it, in the game's own Roboto Condensed: the
 //                           texture font in Data/data_win/ui_package/font/texture_fonts (ERP packages, zlib): a binary
 //                           BMFont description and 512x512 signed-distance pages, BC3 with mipmaps (distance in alpha)
 //   OUT_DIR/preview.png     the two together
-// The text's place, height and colour are measured from the capture (the dark pixels under the logo).
+// The text's place, height and colour are the title screen's, measured once from a capture of it at 1920x1080.
+// Needs the zstd command (brew install zstd).
 import Foundation
 import CoreGraphics
 import ImageIO
@@ -16,7 +19,7 @@ import UniformTypeIdentifiers
 import Compression
 
 let args = CommandLine.arguments
-guard args.count == 4 else { FileHandle.standardError.write("usage: make_loading.swift GRIDLegends.app title.png OUT_DIR\n".data(using: .utf8)!); exit(2) }
+guard args.count == 3 else { FileHandle.standardError.write("usage: make_loading.swift GRIDLegends.app OUT_DIR\n".data(using: .utf8)!); exit(2) }
 func fail(_ s: String) -> Never { FileHandle.standardError.write((s + "\n").data(using: .utf8)!); exit(1) }
 
 // ---- the font -------------------------------------------------------------------------------------------------------
@@ -91,50 +94,48 @@ func dist(_ page: Int, _ u: Double, _ v: Double) -> Double {   // (bilinear, 0..
     return (a * (1 - fy) + b * fy) / 255
 }
 
-// ---- the capture, and where "PRESS (A)" is ---------------------------------------------------------------------------
-guard let src = CGImageSourceCreateWithURL(URL(fileURLWithPath: args[2]) as CFURL, nil),
-      let cap = CGImageSourceCreateImageAtIndex(src, 0, nil) else { fail("can't read \(args[2])") }
-let W = cap.width, H = cap.height, R = W * 4
+// ---- Back: the title screen's background -----------------------------------------------------------------------------
+let bgPath = args[1] + "/Contents/Resources/Data/data_win/ui_package/textures/press_start_screen/grid_legends_concept_bg.tif.erp"
+guard let erp = FileManager.default.contents(atPath: bgPath) else { fail("can't read \(bgPath)") }
+let e = [UInt8](erp)
+func u32(_ o: Int) -> Int { Int(e[o]) | Int(e[o + 1]) << 8 | Int(e[o + 2]) << 16 | Int(e[o + 3]) << 24 }
+guard let z = (0..<(e.count - 4)).first(where: { e[$0] == 0x28 && e[$0 + 1] == 0xB5 && e[$0 + 2] == 0x2F && e[$0 + 3] == 0xFD })
+else { fail("no zstd stream in \(bgPath)") }
+// (the surface's description before it: its format, 70 for BC7, then width and height)
+guard let f = stride(from: z - 12, through: 0, by: -1).first(where: {
+    u32($0) == 70 && (256...8192).contains(u32($0 + 4)) && (256...8192).contains(u32($0 + 8)) })
+else { fail("no BC7 surface in \(bgPath)") }
+let TW = u32(f + 4), TH = u32(f + 8), blocks = ((TW + 3) / 4) * ((TH + 3) / 4) * 16
+let zst = FileManager.default.temporaryDirectory.appendingPathComponent("grid_title_\(getpid()).zst")
+try! Data(e[z...]).write(to: zst)
+defer { try? FileManager.default.removeItem(at: zst) }
+guard let zstd = ["/opt/homebrew/bin/zstd", "/usr/local/bin/zstd", "/usr/bin/zstd"].first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+else { fail("the zstd command is needed for the title screen: brew install zstd") }
+let proc = Process(), pipe = Pipe()
+proc.executableURL = URL(fileURLWithPath: zstd); proc.arguments = ["-dcq", zst.path]; proc.standardOutput = pipe
+try! proc.run()
+let surface = pipe.fileHandleForReading.readDataToEndOfFile(); proc.waitUntilExit()
+guard proc.terminationStatus == 0, surface.count >= blocks else { fail("can't decompress \(bgPath) (\(surface.count) bytes, \(blocks) wanted)") }
+var dds = [UInt32](repeating: 0, count: 37)   // (DDS header + DX10 extension: DXGI_FORMAT_BC7_UNORM, 2D, one mip)
+dds[0] = 0x2053_4444; dds[1] = 124; dds[2] = 0x1 | 0x2 | 0x4 | 0x1000 | 0x80000; dds[3] = UInt32(TH); dds[4] = UInt32(TW)
+dds[5] = UInt32(blocks); dds[7] = 1; dds[19] = 32; dds[20] = 0x4; dds[21] = 0x3031_5844; dds[27] = 0x1000
+dds[32] = 98; dds[33] = 3; dds[35] = 1
+var ddsData = Data(bytes: dds, count: dds.count * 4); ddsData.append(surface.prefix(blocks))
+guard let bsrc = CGImageSourceCreateWithData(ddsData as CFData, nil), let title = CGImageSourceCreateImageAtIndex(bsrc, 0, nil)
+else { fail("ImageIO can't decode the title screen (BC7 \(TW)x\(TH))") }
+
+let W = 1920, H = 1080, R = W * 4
 var px = [UInt8](repeating: 0, count: W * H * 4)
 let rgb = CGColorSpace(name: CGColorSpace.sRGB)!
-px.withUnsafeMutableBytes { CGContext(data: $0.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: R, space: rgb,
-    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.draw(cap, in: CGRect(x: 0, y: 0, width: W, height: H)) }
-func lum(_ x: Int, _ y: Int) -> Int { let i = y * R + x * 4; return (Int(px[i]) + 2 * Int(px[i + 1]) + Int(px[i + 2])) / 4 }
-var bx0 = W, bx1 = 0, by0 = H, by1 = 0, cols = Set<Int>()
-for y in Int(Double(H) * 0.6)..<Int(Double(H) * 0.72) { for x in Int(Double(W) * 0.66)..<Int(Double(W) * 0.8) where lum(x, y) < 150 {
-    bx0 = min(bx0, x); bx1 = max(bx1, x); by0 = min(by0, y); by1 = max(by1, y); cols.insert(x) } }
-guard bx1 > bx0 else { fail("no \"PRESS\" under the logo in this capture: capture the title screen") }
-var runs: [(Int, Int)] = [], s0 = -1
-for x in bx0...(bx1 + 1) { if cols.contains(x) { if s0 < 0 { s0 = x } } else if s0 >= 0 { runs.append((s0, x - 1)); s0 = -1 } }
-guard runs.count >= 6 else { fail("\"PRESS (A)\" not recognised (\(runs.count) shapes)") }
-let pressX0 = runs[0].0, pressX1 = runs[4].1   // (P R E S S, then the button)
-var capTop = H, capBot = 0, ink = (r: 0, g: 0, b: 0), darkest = 9999
-for y in by0...by1 { for x in runs[0].0...runs[0].1 {
-    let l = lum(x, y); if l < 150 { capTop = min(capTop, y); capBot = max(capBot, y) }
-    if l < darkest { darkest = l; let i = y * R + x * 4; ink = (Int(px[i]), Int(px[i + 1]), Int(px[i + 2])) } } }
-let capH = Double(capBot - capTop + 1), centreX = Double(bx0 + bx1 + 1) / 2
-
-// ---- Back: "PRESS (A)" filled in from around it -------------------------------------------------------------------------
-// (a Coons patch: the box's four edges, each an average of 3 pixels outside it, blended in from all sides)
-let ex0 = bx0 - 10, ex1 = bx1 + 10, ey0 = by0 - 10, ey1 = by1 + 10
-func edge(_ x: Int, _ y: Int, _ dx: Int, _ dy: Int, _ k: Int) -> Double {
-    (0..<3).reduce(0.0) { $0 + Double(px[(y + dy * $1) * R + (x + dx * $1) * 4 + k]) } / 3
+px.withUnsafeMutableBytes {
+    let cx = CGContext(data: $0.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: R, space: rgb,
+                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    cx.interpolationQuality = .high; cx.draw(title, in: CGRect(x: 0, y: 0, width: W, height: H))
 }
-var fill = [Double](repeating: 0, count: (ex1 - ex0 + 1) * (ey1 - ey0 + 1) * 3)
-for y in ey0...ey1 { for x in ex0...ex1 { for k in 0..<3 {
-    let u = Double(x - ex0 + 1) / Double(ex1 - ex0 + 2), v = Double(y - ey0 + 1) / Double(ey1 - ey0 + 2)
-    let L = edge(ex0 - 1, y, -1, 0, k), Rr = edge(ex1 + 1, y, 1, 0, k), T = edge(x, ey0 - 1, 0, -1, k), B = edge(x, ey1 + 1, 0, 1, k)
-    let c00 = edge(ex0 - 1, ey0 - 1, -1, -1, k), c10 = edge(ex1 + 1, ey0 - 1, 1, -1, k)
-    let c01 = edge(ex0 - 1, ey1 + 1, -1, 1, k), c11 = edge(ex1 + 1, ey1 + 1, 1, 1, k)
-    let val = (1 - u) * L + u * Rr + (1 - v) * T + v * B
-        - ((1 - u) * (1 - v) * c00 + u * (1 - v) * c10 + (1 - u) * v * c01 + u * v * c11)
-    fill[((y - ey0) * (ex1 - ex0 + 1) + (x - ex0)) * 3 + k] = val
-} } }
-for y in ey0...ey1 { for x in ex0...ex1 { for k in 0..<3 {
-    px[y * R + x * 4 + k] = UInt8(max(0, min(255, fill[((y - ey0) * (ex1 - ex0 + 1) + (x - ex0)) * 3 + k].rounded())))
-} } }
 
-// ---- Text: "LOADING", the cap height of "PRESS", centred where "PRESS (A)" was --------------------------------------
+// ---- Text: "LOADING", the cap height of "PRESS", centred where "PRESS (A)" goes --------------------------------------
+// (the title screen at 1920x1080: "PRESS" x 1342-1414, "PRESS (A)" to 1445, capitals y 696-716, ink 25,25,25)
+let capH = 21.0, centreX = 1394.0, baseY = 717.0, pressW = 73.0, ink = (r: 25, g: 25, b: 25)
 let P_ = glyphs[Int(Character("P").asciiValue!)]!
 let scale = capH / Double(P_.h - 2 * pad)              // (output pixels per font pixel)
 func width(_ s: String) -> Double { s.reduce(0.0) { $0 + Double(glyphs[Int($1.asciiValue!)]!.adv) } * scale }
@@ -142,11 +143,10 @@ func inkWidth(_ s: String) -> Double {   // (first glyph's left ink edge to the 
     let f = glyphs[Int(s.first!.asciiValue!)]!, l = glyphs[Int(s.last!.asciiValue!)]!
     return width(s) - Double(l.adv) * scale + Double(l.xo + l.w - pad) * scale - Double(f.xo + pad) * scale
 }
-let track = (Double(pressX1 - pressX0 + 1) - inkWidth("PRESS")) / 4   // (the game's letter spacing, from "PRESS")
+let track = (pressW - inkWidth("PRESS")) / 4           // (the game's letter spacing, from "PRESS")
 let text = "LOADING"
 let total = width(text) + track * Double(text.count - 1)
 var pen = centreX - total / 2
-let baseY = Double(capBot + 1)                         // (the baseline: the bottom of the capitals)
 var txt = [UInt8](repeating: 0, count: W * H * 4)
 let soft = 0.5 / (scale * Double(pad))                 // (half an output pixel, in distance units)
 for c in text {
@@ -165,7 +165,7 @@ for c in text {
 }
 
 // ---- write ----------------------------------------------------------------------------------------------------------
-let out = args[3]
+let out = args[2]
 try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
 func image(_ b: inout [UInt8]) -> CGImage { b.withUnsafeMutableBytes { CGContext(data: $0.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: R, space: rgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()! } }
 func write(_ img: CGImage, _ name: String) {
