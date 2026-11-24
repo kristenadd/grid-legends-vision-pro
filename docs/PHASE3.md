@@ -46,8 +46,26 @@ Feral's **Low** preset at **1280x720** fits: a race ran steady at ~6.9 GB with ~
 `ShouldLoadDefaultPreset` 0, `Setup\Apple M2 GPU\ScreenW/H` 1280x720); a fresh launch kept `DefaultPreset = low`.
 Higher settings in the game's options may run out of memory again.
 
-Next lever if more headroom is needed: the start-up pipeline load (Feral's "F3D Warmer", settings under
-`Software\IndirectX\Direct3D\Config`), not explored yet.
+### Memory and frame rate follow-up (same day)
+
+Feral's Metal-layer settings live in `HKCU\Software\IndirectX\Direct3D\Config` (names from the game's
+`F3DConfig::KeyAccessor<...>::kKeySuffix` symbols; `tools/vxmac_grid.py pref` shows, sets and unsets them with the
+game stopped). Measured at the title screen, 1280x720 Low:
+
+| Setting | Pipelines | Title-screen footprint |
+|---|---|---|
+| defaults | 36,773 | 6.1-6.2 GB and growing |
+| `EnableF3DWarmer` 0 (the pipeline warmer) | 36,773 | no change (reverted) |
+| **`HarvestBinaryArchive` 0** (no growing pipeline archive) | 36,773 | **5.38 GB, steady** |
+
+The 36,773 pipelines are the game's own loading (also with empty binary archives or 8 GB reported RAM); VXpro's
+pipeline hooks only ask Metal for reflection in their dump mode (off). A race needs ~7.0 GB either way (peak 7.03 GB,
+~1.2 GB left): harvesting off removes the slow growth, not the race's need.
+
+**Frame rate:** the game's own limit was 30 (`GraphicsSettings\FramerateLimit`). At 60 a race ran at a median
+59.2 fps (52.5-67), GPU ~62 % busy, thermal state 2 (serious); memory unchanged.
+
+New installs are seeded with both (`FramerateLimit` 60, `HarvestBinaryArchive` 0); a fresh simulator launch kept them.
 
 The headset reached thermal state 3 (critical) after hours of testing, during the race.
 

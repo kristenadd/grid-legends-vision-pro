@@ -9,6 +9,9 @@
     tools/vxmac_grid.py launch  [--restart] [--present window|immersive] [--env NAME=VALUE ...]
                                 (default: a floating window you can move and resize; immersive: VXpro's screen in a space)
     tools/vxmac_grid.py pull    [--tag <t>]   the logs back into build/grid/logs/<t>
+    tools/vxmac_grid.py pref    [--set 'Path\\Name=value' ...] [--unset 'Path\\Name' ...] [--show <text>]   Feral's settings file on the headset
+                                (stops the game first; paths under HKEY_CURRENT_USER, e.g.
+                                 'Software\\IndirectX\\Direct3D\\Config\\EnableF3DWarmer=0'; integers or text)
 
 Commands that talk to the headset take --dry-run. Everything made here goes into build/ (git-ignored). The App Store
 bundle is only read. Your receipt is copied unchanged: the game's activation needs it (docs/PHASE1.md).
@@ -197,12 +200,68 @@ def cmd_pull(a):
     say('logs: %s (they name your files and device: do not post them unread)' % out)
 
 
+PREFS = 'Library/Application Support/Feral Interactive/GRIDLegends/Preferences Data'
+
+
+def stop_game(c):
+    r = subprocess.run(['xcrun', 'devicectl', 'device', 'info', 'processes', '--device', c['device']], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        if 'GRIDHost.app/GRIDHost' in line:
+            pid = line.split()[0]
+            devicectl(['device', 'process', 'terminate', '--device', c['device'], '--pid', pid], check=False)
+            time.sleep(2)
+
+
+def cmd_pref(a):
+    import xml.etree.ElementTree as ET
+    c = load_config()
+    if a.set or a.unset: stop_game(c)
+    with tempfile.TemporaryDirectory() as t:
+        local = os.path.join(t, 'prefs.xml')
+        devicectl(['device', 'copy', 'from', '--device', c['device'], '--domain-type', 'appDataContainer', '--domain-identifier',
+                   c['bundle_id'], '--source', PREFS, '--destination', local])
+        tree = ET.parse(local); root = tree.getroot()
+        hkcu = root.find("key[@name='HKEY_CURRENT_USER']")
+        for kv in a.set:
+            path, _, value = kv.partition('=')
+            parts = path.split('\\')
+            node = hkcu
+            for name in parts[:-1]:
+                child = node.find("key[@name='%s']" % name)
+                if child is None: child = ET.SubElement(node, 'key', name=name)
+                node = child
+            v = node.find("value[@name='%s']" % parts[-1])
+            if v is None: v = ET.SubElement(node, 'value', name=parts[-1])
+            is_int = value.lstrip('-').isdigit()
+            v.set('type', 'integer' if is_int else 'string'); v.text = value
+            say('set %s = %s' % (path, value))
+        for path in a.unset:
+            parts = path.split('\\'); node = hkcu
+            for name in parts[:-1]:
+                node = node.find("key[@name='%s']" % name) if node is not None else None
+            v = node.find("value[@name='%s']" % parts[-1]) if node is not None else None
+            if v is not None: node.remove(v); say('unset %s (the game\'s default again)' % path)
+        def walk(e, path):
+            for ch in e:
+                if ch.tag == 'key': yield from walk(ch, path + [ch.get('name')])
+                elif ch.tag == 'value': yield '\\'.join(path + [ch.get('name')]), ch.text
+        if a.show:
+            for k, v in walk(hkcu, []):
+                if a.show.lower() in k.lower(): say('%s = %s' % (k, v))
+        if a.set or a.unset:
+            tree.write(local, encoding='UTF-8', xml_declaration=True)
+            devicectl(['device', 'copy', 'to', '--device', c['device'], '--domain-type', 'appDataContainer', '--domain-identifier',
+                       c['bundle_id'], '--source', local, '--destination', PREFS])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = ap.add_subparsers(dest='cmd', required=True)
     p = sp.add_parser('prepare'); p.add_argument('--game', default='/Applications/GRIDLegends.app'); p.add_argument('--team')
     p.add_argument('--bundle-id'); p.add_argument('--device')
     sp.add_parser('build')
+    p = sp.add_parser('pref'); p.add_argument('--set', action='append', default=[]); p.add_argument('--show')
+    p.add_argument('--unset', action='append', default=[])
     for name in ('install', 'copy', 'launch', 'pull'):
         p = sp.add_parser(name); p.add_argument('--dry-run', action='store_true')
         if name == 'copy': p.add_argument('--tries', type=int, default=8)
@@ -213,7 +272,7 @@ def main():
         if name == 'pull': p.add_argument('--tag')
     a = ap.parse_args()
     return {'prepare': cmd_prepare, 'build': cmd_build, 'install': cmd_install, 'copy': cmd_copy,
-            'launch': cmd_launch, 'pull': cmd_pull}[a.cmd](a) or 0
+            'launch': cmd_launch, 'pull': cmd_pull, 'pref': cmd_pref}[a.cmd](a) or 0
 
 
 if __name__ == '__main__':

@@ -8,8 +8,10 @@
 // Its settings: Library/Application Support/Feral Interactive/GRIDLegends/Preferences Data (Feral's registry XML).
 // Before the first launch it is seeded so the Mac-only pre-game launcher and its consent prompts never open; usage
 // data and crash reports are declined; and the game starts on Feral's Low preset at 1280x720 (ShouldLoadDefaultPreset 0:
-// the detected "high" preset ran out of the app's ~8 GB loading a race; Low peaks at ~6.9 GB in a race). The settings
-// can be raised in the game's options. An existing file keeps everything but the launcher switch.
+// the detected "high" preset ran out of the app's ~8 GB loading a race; Low peaks at ~7.0 GB in a race), 60 fps
+// (FramerateLimit; races ran at ~59 fps on an M2), and Feral's pipeline cache harvesting off (HarvestBinaryArchive 0
+// under Software\IndirectX\Direct3D\Config: it kept growing a binary archive in memory, ~0.8 GB at the title screen).
+// The settings can be changed in the game's options. An existing file keeps everything but the launcher switch.
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
 #include <execinfo.h>
@@ -47,6 +49,13 @@ static NSString *const kSeed =
      "<registry>\n"
      "    <key name=\"HKEY_CURRENT_USER\">\n"
      "        <key name=\"Software\">\n"
+     "            <key name=\"IndirectX\">\n"
+     "                <key name=\"Direct3D\">\n"
+     "                    <key name=\"Config\">\n"
+     "                        <value name=\"HarvestBinaryArchive\" type=\"integer\">0</value>\n"
+     "                    </key>\n"
+     "                </key>\n"
+     "            </key>\n"
      "            <key name=\"Feral Interactive\">\n"
      "                <key name=\"GRIDLegends\">\n"
      "                    <key name=\"GraphicsSettings\">\n"
@@ -67,6 +76,7 @@ static NSString *const kSeed =
      "                        <value name=\"VehicleReflections\" type=\"integer\">0</value>\n"
      "                        <value name=\"VolumetricLights\" type=\"integer\">0</value>\n"
      "                        <value name=\"WeatherEffects\" type=\"integer\">0</value>\n"
+     "                        <value name=\"FramerateLimit\" type=\"integer\">60</value>\n"
      "                    </key>\n"
      "                    <key name=\"Setup\">\n"
      "                        <value name=\"AllowSendCrashReports\" type=\"integer\">0</value>\n"
