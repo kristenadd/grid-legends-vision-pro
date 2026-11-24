@@ -92,7 +92,8 @@ GridLegendsVisionPro/
 ### Phase 0 — Feasibility gates (Mac only) — **done 2026-11-23: go** ([results](docs/PHASE0.md))
 
 Loads as a dylib; runs to the title screen with no receipt and another bundle id; no pool patch needed
-so far. New item for Phase 1: skip Feral's pre-game launcher (`GameOptionsDialogShouldShow = 0`).
+so far. **Correction (Phase 1):** on the Mac the game could still reach your real install's activation; in the visionOS
+simulator Feral's activation check fails and the game exits with 173 ([Phase 1](docs/PHASE1.md)). New item for Phase 1: skip Feral's pre-game launcher (`GameOptionsDialogShouldShow = 0`).
 In-race memory is still to be measured.
 
 1. **Receipt / licence behaviour.** The binary reads `appStoreReceiptURL` and carries PKCS7 receipt OIDs.
@@ -177,7 +178,7 @@ Virtual Addressing). Game files never go in git or releases.
 
 | Risk | Likelihood | Mitigation / decision |
 |---|---|---|
-| Receipt validation blocks startup | Ruled out on the Mac (Phase 0) | Receipt only used for online login |
+| Feral activation blocks startup | **Solved in Phase 1** with your own unmodified receipt in the redirected bundle ([details](docs/PHASE1.md)); without it `_Exit(173)` | Copy the receipt with the data in Phase 2; never patch or spoof licence checks |
 | Feral pre-game launcher (AppKit + WebKit) | Certain | Seed `GameOptionsDialogShouldShow = 0` before first launch |
 | IOHID-only controller support | Certain | Virtual HID pad (Phase 3) |
 | Run-time-only AppKit/Feral UI calls (alerts, launcher-style dialogs, WebView UI) | High | libvxkit catch-all logs; implement what is hit |

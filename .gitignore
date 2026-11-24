@@ -1,2 +1,4 @@
 build/
 .DS_Store
+app/GRIDHost.xcodeproj/
+app/Local.xcconfig

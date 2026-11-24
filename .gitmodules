@@ -1,0 +1,3 @@
+[submodule "third_party/VXpro"]
+	path = third_party/VXpro
+	url = https://github.com/Ag3497120/VXpro.git

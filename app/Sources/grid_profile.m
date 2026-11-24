@@ -1,0 +1,99 @@
+// grid_profile.m: what the host does for GRID Legends before the game starts (called from host.m; tools/sync_host.py).
+//
+// The game's files on the headset (copied by tools/vxmac_grid.py copy), in the app's Documents:
+//   GRIDLegends.app/Contents/Info.plist          the game's own Info.plist
+//   GRIDLegends.app/Contents/Resources/...       its Resources (Data/ is 34 GB)
+//   GRIDLegends.app/Contents/MacOS/GRIDLegends   an empty placeholder made here (_NSGetExecutablePath, libvxsystem)
+// The game's main bundle (libglcf, libglfoundation) is that folder: GL_BUNDLE_PATH.
+// Its settings: Library/Application Support/Feral Interactive/GRIDLegends/Preferences Data (Feral's registry XML).
+// Before the first launch it is seeded so the Mac-only pre-game launcher and its consent prompts never open; usage
+// data and crash reports are declined. An existing file keeps everything but the launcher switch.
+#import <Foundation/Foundation.h>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <stdlib.h>
+#include <string.h>
+
+void vxmac_log(const char *fmt, ...);
+
+// (diagnostics: who ends the process. exit() runs atexit handlers on the calling thread, so its stack shows the caller;
+//  frames in the game are printed as GRIDLegends.dylib+offset, the offsets of tools/grid_prepare.py's input)
+static void grid_atexit(void) {
+    void *f[48]; int n = backtrace(f, 48);
+    for (int i = 0; i < n; i++) {
+        Dl_info d;
+        if (dladdr(f[i], &d) && d.dli_fname) {
+            const char *b = strrchr(d.dli_fname, '/');
+            vxmac_log("GRID: exit stack %2d %s+%#lx %s", i, b ? b + 1 : d.dli_fname, (unsigned long)((char *)f[i] - (char *)d.dli_fbase), d.dli_sname ? d.dli_sname : "");
+        } else vxmac_log("GRID: exit stack %2d %p", i, f[i]);
+    }
+}
+
+// (defaults only: -env NAME=VALUE on the launch command line wins)
+void grid_profile_env(void) {
+    atexit(grid_atexit);
+    setenv("VXRT_VR_MODE", "screen", 0);            // the presenter's world-locked screen only: never head-driven VR
+    setenv("VXMAC_GPU_WORKING_SET_MB", "4096", 0);  // the GPU budget the game is told (the app's limit is ~8 GB in all)
+    setenv("GL_DISPLAY_HZ", "90", 0);               // CVDisplayLink stand-in (libglcv)
+}
+
+static NSString *const kSeed =
+    @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+     "<registry>\n"
+     "    <key name=\"HKEY_CURRENT_USER\">\n"
+     "        <key name=\"Software\">\n"
+     "            <key name=\"Feral Interactive\">\n"
+     "                <key name=\"GRIDLegends\">\n"
+     "                    <key name=\"Setup\">\n"
+     "                        <value name=\"AllowSendCrashReports\" type=\"integer\">0</value>\n"
+     "                        <value name=\"AllowSendUsageData\" type=\"integer\">0</value>\n"
+     "                        <value name=\"GameOptionsDialogShouldShow\" type=\"integer\">0</value>\n"
+     "                        <value name=\"GameOptionsDialogShown\" type=\"integer\">1</value>\n"
+     "                        <value name=\"SoftwareUpdatedAskedUser\" type=\"integer\">1</value>\n"
+     "                        <key name=\"SpecificationAlerts\">\n"
+     "                            <value name=\"DocsAndControlsSelectedPadsNoMouse\" type=\"integer\">1</value>\n"
+     "                        </key>\n"
+     "                    </key>\n"
+     "                </key>\n"
+     "            </key>\n"
+     "        </key>\n"
+     "    </key>\n"
+     "</registry>\n";
+
+static void seed_preferences(void) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *dir = [support stringByAppendingPathComponent:@"Feral Interactive/GRIDLegends"];
+    NSString *file = [dir stringByAppendingPathComponent:@"Preferences Data"];
+    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *xml = [NSString stringWithContentsOfFile:file encoding:NSUTF8StringEncoding error:nil];
+    if (!xml) {
+        BOOL ok = [kSeed writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        vxmac_log("GRID: preferences seeded (launcher off, usage data and crash reports declined): %s", ok ? "ok" : "FAILED");
+        return;
+    }
+    // (an existing file: only the launcher switch is forced off)
+    NSString *on = @"<value name=\"GameOptionsDialogShouldShow\" type=\"integer\">1</value>";
+    if ([xml containsString:on]) {
+        xml = [xml stringByReplacingOccurrencesOfString:on withString:@"<value name=\"GameOptionsDialogShouldShow\" type=\"integer\">0</value>"];
+        [xml writeToFile:file atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        vxmac_log("GRID: preferences: pre-game launcher switched off");
+    }
+}
+
+// The game's folder in Documents: returns the executable placeholder's path (for VXMAC_EXECUTABLE_PATH), or nil when
+// the game's data is not there yet.
+NSString *grid_prepare_data(NSString *root) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    BOOL dir = NO;
+    if (![fm fileExistsAtPath:[root stringByAppendingPathComponent:@"Contents/Resources/Data"] isDirectory:&dir] || !dir) return nil;
+    if (![fm fileExistsAtPath:[root stringByAppendingPathComponent:@"Contents/Info.plist"]])
+        vxmac_log("GRID: %s/Contents/Info.plist is missing (copy it with the data)", root.UTF8String);
+    NSString *macos = [root stringByAppendingPathComponent:@"Contents/MacOS"];
+    [fm createDirectoryAtPath:macos withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *exe = [macos stringByAppendingPathComponent:@"GRIDLegends"];
+    if (![fm fileExistsAtPath:exe]) [NSData.data writeToFile:exe atomically:NO];
+    setenv("GL_BUNDLE_PATH", root.UTF8String, 1);
+    seed_preferences();
+    return exe;
+}

@@ -1,0 +1,8 @@
+// Signing for GRID Legends Host. Leave this file as it is: put your own values in Local.xcconfig next to it
+// (git-ignored):
+//   DEVELOPMENT_TEAM = <your 10-character Team ID>
+//   GRID_BUNDLE_ID = com.yourname.GRIDHost
+// A paid Apple Developer Program team is needed (Increased Memory Limit, Extended Virtual Addressing).
+DEVELOPMENT_TEAM =
+GRID_BUNDLE_ID = com.example.GRIDHost
+#include? "Local.xcconfig"

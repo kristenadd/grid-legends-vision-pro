@@ -4,12 +4,12 @@ Game: `/Applications/GRIDLegends.app`, Feral RC9, build 376070.68732.33491, exec
 SHA-256 `73e7a8fe7741b07ab36128dcea1a7ca890a45a7255d6d4b463bddcebb662004e`. Reproduce with
 [`tools/mac_trial.sh`](../tools/mac_trial.sh).
 
-## Verdict: go
+## Verdict: go on the Mac; blocked in the visionOS simulator by Feral's activation (see [Phase 1](PHASE1.md))
 
 | Gate | Result |
 |---|---|
 | Converted game loads | **Pass.** `macho_prepare.py --as-dylib` (macOS platform) → `dyhost_mac -n`: all fixups and C++ initializers ran. entry_offset 65472 (0xFFC0). |
-| Receipt / licence | **Pass.** Run from a stand-in bundle (`com.example.gridtest`, no `_MASReceipt`, ad-hoc signed): launcher → title screen → "No save game found, create one?". No licence prompt, no exit. |
+| Receipt / licence | **Pass on the Mac only** (see [Phase 1](PHASE1.md): Feral's online activation fails in the visionOS simulator, `_Exit(173)`). Run from a stand-in bundle (`com.example.gridtest`, no `_MASReceipt`, ad-hoc signed): launcher → title screen → "No save game found, create one?". No licence prompt, no exit. |
 | Large memory reservations | **No pool patch needed (provisional).** See below. |
 
 ## Receipt: what the code does
@@ -18,14 +18,15 @@ SHA-256 `73e7a8fe7741b07ab36128dcea1a7ca890a45a7255d6d4b463bddcebb662004e`. Repr
   Foundation selectors (`0x1010e82d4`, stored at `0x102f362a8`). No direct load of that slot was found.
 - The other "receipt" strings sit next to `steamticket`, `licence`, `licenceid`, `password`, `token` and
   `access_token`: an online login payload and a log-redaction list (Feral/EA online services), not a start-up check.
-- Conclusion: the receipt only matters for online features, which are out of scope.
+- Conclusion at the time: the receipt only matters for online features. **Wrong:** Feral's own activation
+  (`CActivation`) also gates start-up; on this Mac it passed with the real install's activation reachable. See Phase 1.
 
 ## Memory (title screen, Mac, M-series)
 
 - Footprint: 4.9–5.2 GB at the title screen, **including the launcher's WebKit**. In-race memory is not
   measured yet (the background input tools could not drive the menus). Still to check, against the headset's ~8 GB.
-- Big virtual regions: one 385 GB guard and 13.8 + 1.8 GB `rwx` regions at `0x7000000000+`. That is
-  JavaScriptCore's reservation for the launcher's web view, not the engine. Engine-owned reservations
+- Big virtual regions: one 385 GB guard and 13.8 + 1.8 GB `rwx` regions at `0x7000000000+`. Phase 0 took these for
+  JavaScriptCore's; **Phase 1 showed the 16 GB at `0x7000000000` is the game's own reservation** (`GRIDLegends.dylib+0x1145c20`). Engine-owned reservations
   are small ("Untagged" total 16.3 GB, of which 15.6 GB is the JSC pair above).
 - Cyberpunk needed its pool patch because a 64 GB reservation failed on the headset. Nothing comparable
   here, and the launcher (with its WebKit) will not run on the headset.
