@@ -31,11 +31,12 @@ The last command copies the logs back to the Mac (`build/grid/logs/`).
 - `copy` sends the game's data (about 34 GB), its Info.plist and **your own App Store receipt, unchanged** into the app's
   container. The game's activation check needs the receipt. Keep the headset awake and charging until `copy` finishes.
   If it stops, run it again and it resumes.
-- **Never uninstall GRID Legends Host.** Deleting it deletes the copied game data and your saves. To update, keep the same
-  team and bundle ID and run `build` then `install` again.
+- **Never uninstall the host app** (called "GRID Legends" on the headset). Deleting it deletes the copied game data and
+  your saves. To update, keep the same team and bundle ID and run `build` then `install` again.
 - The game starts on Feral's Low preset at 1280x720, 60 fps: higher presets can run out of the app's ~8 GB while a
   race loads. `tools/vxmac_grid.py pref --show <text>` / `--set` / `--unset` change Feral's settings on the headset.
-- Your game files, the prepared executable and the receipt stay on your Mac and headset. Nothing of the game goes into git.
+- The app's icon is made at build time from the game's own (`tools/make_icon.swift`). Your game files, the prepared
+  executable, the icon and the receipt stay on your Mac and headset. Nothing of the game goes into git.
 
 ## Simulator
 

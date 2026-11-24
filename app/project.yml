@@ -27,6 +27,8 @@ targets:
     platform: visionOS
     sources:
       - path: Sources
+      - path: ../build/grid/Assets.xcassets   # the icon, made by tools/make_icon.swift at build time
+        optional: true
       - path: ../third_party/VXpro/app/Sources
         excludes:
           - host.m
@@ -43,6 +45,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: "$(GRID_BUNDLE_ID)"
         PRODUCT_NAME: GRIDHost
         INFOPLIST_FILE: Sources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: Sources/GRIDHost.entitlements
         CLANG_ENABLE_OBJC_ARC: YES
         SWIFT_VERSION: "5.0"

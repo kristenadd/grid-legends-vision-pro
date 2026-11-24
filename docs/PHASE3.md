@@ -74,3 +74,30 @@ The headset reached thermal state 3 (critical) after hours of testing, during th
 - Rumble: `IOHIDDeviceSetReport`/`SetValue` are accepted and ignored.
 - Racing wheels (no USB on the headset).
 - Driving feel with the pad (stick dead zones, trigger travel) not tuned.
+
+## Open: textures blinking about once a second (reported 2026-11-23)
+
+A texture on the car, and some others in races, blink on and off roughly every second. Checked offline:
+- VXpro's render-pass hook only rewrites passes for its immersive HUD (off in the window); its encoder "clears" are its
+  own bookkeeping. Not the cause.
+- The game manages graphics memory itself: it reads `recommendedMaxWorkingSetSize` (VXpro answers 4096 MB; a race used
+  ~3.6 GB), `currentAllocatedSize`, and marks resources purgeable (`setPurgeableState:`); Feral's settings include
+  texture/buffer paging (`EnableTexturePaging`, `TexturePageOutTime`, `ResourcePagingBudget/Target`).
+- In a race the system was compressing ~2.4 GB of the app's memory: heavy memory pressure, under which the system may
+  discard *volatile* resources. A Mac with plenty of RAM rarely does.
+
+First hypothesis: cached textures marked volatile are discarded by the system and reloaded by the game. libglmtl logs
+the purgeable calls by state every 5 s (`GL_NO_VOLATILE=1` keeps them non-volatile). **Ruled out on the headset
+(2026-11-24):** in a race with the left front fender visibly blinking (about half a second, about once a second) the
+game made no `setPurgeableState:` calls at all.
+
+Frame bursts (`tools/vxmac_grid.py burst`, app/Sources/grid_burst.m: the game's presented frames read back at full size;
+devicectl has no screenshots or screen recording on visionOS): two 4 s bursts of every second frame, the second while
+the fender was blinking, show no region that changes and changes back (window 1 and 6 frames, 32 px cells). So either
+it alternates frame to frame (every second frame always sees the same state), or it isn't in the game's picture and
+comes from the window's display path. Next: a burst of every frame (`burst --step 1 --frames 120`; the build that takes
+the step from the request is built, not yet installed). Then Feral's texture paging (`EnableTexturePaging=0`) and the
+4096 MB budget (`VXMAC_GPU_WORKING_SET_MB`) if it is in the game's frames.
+
+Note: since `VXMAC_GPU_FAMILY_MAC=1` became the default the game takes its Mac path with shared heaps, which the
+simulator refuses (`MTLStorageModePrivate is required for heaps`): the simulator now stops before the game's window.

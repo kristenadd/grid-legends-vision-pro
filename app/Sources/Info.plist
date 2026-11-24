@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>GRID Legends Host</string>
+	<string>GRID Legends</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -32,9 +32,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSHandsTrackingUsageDescription</key>
-	<string>GRID Legends Host uses your hands as the game's mouse: point at the screen and pinch to click.</string>
+	<string>GRID Legends uses your hands as the game's mouse: point at the screen and pinch to click.</string>
 	<key>NSWorldSensingUsageDescription</key>
-	<string>GRID Legends Host keeps the game's screen in place in your room.</string>
+	<string>GRID Legends keeps the game's screen in place in your room.</string>
 	<key>UIApplicationPreferredDefaultSceneSessionRole</key>
 	<string>UIWindowSceneSessionRoleApplication</string>
 	<key>UIApplicationSceneManifest</key>

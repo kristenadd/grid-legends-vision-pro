@@ -11,7 +11,8 @@ that must match once (the script stops when VXpro's text changed, so the update 
      immersive space unless the launch says -present vr;
   3. Cyberpunk's UserSettings.json reading only for Cyberpunk;
   4. GRID's data folder: Documents/GRIDLegends.app/Contents/Resources/Data (grid_prepare_data);
-  5. the floating window finds the game's Metal layer in a child view too (grid_metal_layer).
+  5. the floating window finds the game's Metal layer in a child view too (grid_metal_layer);
+  6. a burst of frames on request (grid_burst in app/Sources/grid_burst.m; tools/vxmac_grid.py burst).
 """
 import os, subprocess, sys
 
@@ -57,6 +58,10 @@ HOOKS = [
      '''    if (!l || l.superlayer == self.view.layer) return;
     [l removeFromSuperlayer];   // (GRID: Feral's layer may sit in a child view's (never shown) layer)
     l.frame = self.view.bounds; l.contentsGravity = kCAGravityResizeAspect;'''),
+    # 6
+    ("""    if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }""",
+     """    if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }
+    { void grid_burst(void *, void *, double); grid_burst(cb, tex, tn); }   // (GRID: grid_burst.m)"""),
 ]
 
 

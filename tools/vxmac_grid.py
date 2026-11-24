@@ -9,6 +9,7 @@
     tools/vxmac_grid.py launch  [--restart] [--present window|immersive] [--env NAME=VALUE ...]
                                 (default: a floating window you can move and resize; immersive: VXpro's screen in a space)
     tools/vxmac_grid.py pull    [--tag <t>]   the logs back into build/grid/logs/<t>
+    tools/vxmac_grid.py burst   [--tag <t>]   [--step N --frames N]  frames of the running game (default every 2nd, 120) as PNGs in build/grid/logs/<t>
     tools/vxmac_grid.py pref    [--set 'Path\\Name=value' ...] [--unset 'Path\\Name' ...] [--show <text>]   Feral's settings file on the headset
                                 (stops the game first; paths under HKEY_CURRENT_USER, e.g.
                                  'Software\\IndirectX\\Direct3D\\Config\\EnableF3DWarmer=0'; integers or text)
@@ -81,6 +82,9 @@ def cmd_build(a):
     c = load_config()
     if not os.path.exists(os.path.join(PREPARED, 'GRIDLegends.dylib')): sys.exit('no work copy: run prepare')
     run([sys.executable, '-I', os.path.join(HERE, 'tools', 'sync_host.py'), '--check'])
+    icns = os.path.join(c['game'], 'Contents', 'Resources', 'GameIcon.icns')
+    if os.path.exists(icns):  # the home-screen icon, made from the game's own (into build/, never into git)
+        run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'make_icon.swift'), icns, os.path.join(WORK, 'Assets.xcassets')])
     appdir = os.path.join(HERE, 'app')
     run(['xcodegen'], cwd=appdir)
     run(['xcodebuild', '-project', 'GRIDHost.xcodeproj', '-scheme', 'GRIDHost', '-destination', 'generic/platform=visionOS',
@@ -200,6 +204,24 @@ def cmd_pull(a):
     say('logs: %s (they name your files and device: do not post them unread)' % out)
 
 
+def cmd_burst(a):
+    """Frames of the running game: asks for a burst (app/Sources/grid_burst.m), copies it back, converts it to PNG."""
+    import tempfile
+    c = load_config()
+    out = os.path.join(WORK, 'logs', a.tag or time.strftime('burst-%Y%m%d-%H%M%S')); os.makedirs(out, exist_ok=True)
+    dom = ['--device', c['device'], '--domain-type', 'appDataContainer', '--domain-identifier', c['bundle_id']]
+    with tempfile.NamedTemporaryFile('w', delete=False) as f: f.write('%d %d' % (a.step, a.frames)); req = f.name
+    devicectl(['device', 'copy', 'to'] + dom + ['--source', req, '--destination', 'Documents/grid_burst'])
+    os.unlink(req)
+    say('burst asked for: waiting %d s' % a.wait); time.sleep(a.wait)
+    raw = os.path.join(out, 'raw')
+    devicectl(['device', 'copy', 'from'] + dom + ['--source', 'Documents/burst', '--destination', raw])
+    idx = os.path.join(raw, 'index.txt')
+    if not os.path.exists(idx): sys.exit('no frames came back (is the game running and in front?)')
+    run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'burst_png.swift'), raw, out])
+    say('frames: %s' % out)
+
+
 PREFS = 'Library/Application Support/Feral Interactive/GRIDLegends/Preferences Data'
 
 
@@ -260,6 +282,8 @@ def main():
     p = sp.add_parser('prepare'); p.add_argument('--game', default='/Applications/GRIDLegends.app'); p.add_argument('--team')
     p.add_argument('--bundle-id'); p.add_argument('--device')
     sp.add_parser('build')
+    p = sp.add_parser('burst'); p.add_argument('--tag'); p.add_argument('--wait', type=int, default=10)
+    p.add_argument('--step', type=int, default=2, help='every Nth frame'); p.add_argument('--frames', type=int, default=120)
     p = sp.add_parser('pref'); p.add_argument('--set', action='append', default=[]); p.add_argument('--show')
     p.add_argument('--unset', action='append', default=[])
     for name in ('install', 'copy', 'launch', 'pull'):
@@ -272,7 +296,7 @@ def main():
         if name == 'pull': p.add_argument('--tag')
     a = ap.parse_args()
     return {'prepare': cmd_prepare, 'build': cmd_build, 'install': cmd_install, 'copy': cmd_copy,
-            'launch': cmd_launch, 'pull': cmd_pull, 'pref': cmd_pref}[a.cmd](a) or 0
+            'launch': cmd_launch, 'pull': cmd_pull, 'pref': cmd_pref, 'burst': cmd_burst}[a.cmd](a) or 0
 
 
 if __name__ == '__main__':
