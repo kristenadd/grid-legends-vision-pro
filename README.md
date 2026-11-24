@@ -35,8 +35,11 @@ The last command copies the logs back to the Mac (`build/grid/logs/`).
   your saves. To update, keep the same team and bundle ID and run `build` then `install` again.
 - The game starts on Feral's Low preset at 1280x720, 60 fps: higher presets can run out of the app's ~8 GB while a
   race loads. `tools/vxmac_grid.py pref --show <text>` / `--set` / `--unset` change Feral's settings on the headset.
-- The app's icon is made at build time from the game's own (`tools/make_icon.swift`). Your game files, the prepared
-  executable, the icon and the receipt stay on your Mac and headset. Nothing of the game goes into git.
+- The window shows a splash until the game's first video (the choice is remembered): `build --loading <capture>` makes
+  it from a capture of the title screen (`burst --step 1 --frames 1`), with "LOADING" in the game's own font where
+  "PRESS (A)" was (`tools/make_loading.swift`); `build --splash <image>` uses any image with "Loading..." under it. The app's icon is made at build time from the game's own (`tools/make_icon.swift`).
+- Your game files, the prepared executable, the icon, the splash and the receipt stay on your Mac and headset. Nothing of
+  the game goes into git.
 
 ## Simulator
 

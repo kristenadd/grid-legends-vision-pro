@@ -201,6 +201,7 @@ void *grid_metal_layer(void) {
 #import <UIKit/UIKit.h>
 #import <GameController/GameController.h>
 static void grid_layout(UIViewController *self, SEL _cmd) {
+    { void grid_splash_show(UIView *); grid_splash_show(self.view); }   // (grid_splash.m: until the first video)
     for (CALayer *l in self.view.layer.sublayers)
         if ([l isKindOfClass:[CAMetalLayer class]]) l.frame = self.view.bounds;
     // (visionOS turns a controller's buttons into pinches on the view you look at unless the view says it takes

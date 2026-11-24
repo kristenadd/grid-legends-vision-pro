@@ -436,6 +436,7 @@ static int present_hook(void *cb, void *tex, uint32_t w, uint32_t h) {
     double tn = CACurrentMediaTime();
     if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }
     { void grid_burst(void *, void *, double); grid_burst(cb, tex, tn); }   // (GRID: grid_burst.m)
+    { void grid_splash_frame(void *, void *); grid_splash_frame(cb, tex); }   // (GRID: grid_splash.m)
     if (!g_vr) return 1;                             // (flat: the layer is in the window, presented as usual)
     void *hud = vxmtl_hud_take();
     { void vx_xros_vr_set_hud_layer(void *); vx_xros_vr_set_hud_layer(hud); vxmtl_hud_want(vx_xros_vr_driving()); }   // (h33: this frame's HUD layer, or none)
