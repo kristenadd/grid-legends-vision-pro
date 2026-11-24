@@ -151,7 +151,7 @@ Reuse VXpro's `shims/vxaudio.m` (its HAL stand-in over RemoteIO; note VXpro turn
 default after a long-session memory leak, h67 — check which path suits GRID). OpenAL: stubs first; only
 build OpenAL Soft if something besides voice chat needs it.
 
-### Phase 5 — The virtual screen
+### Phase 5 — The virtual screen (**done in Phase 2**: a floating visionOS window by default; `launch --present immersive` for VXpro's screen)
 
 Only VXpro's world-locked panel mode (its mode (b)) is used: the game's frame drawn on a large flat
 screen placed in front of you, re-placed when you recenter. Pin the presenter to it (`VXRT_VR_MODE=screen`
@@ -191,7 +191,7 @@ Virtual Addressing). Game files never go in git or releases.
 
 1. Converted dylib loads on the Mac (`dyhost_mac`) — **end of Phase 0**
 2. `check_imports`: 0 missing; game reaches startup in the simulator
-3. Main menu on the headset in a panel
+3. Main menu on the headset in a panel — **title screen reached 2026-11-23** ([Phase 2](docs/PHASE2.md))
 4. A full race with a gamepad and sound — **playable**
 5. One-command setup tool and guide
 

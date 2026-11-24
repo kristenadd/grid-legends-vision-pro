@@ -178,6 +178,7 @@ static void parse_args(void) {
         { const char *n = getenv("VXMAC_NPU"); if (!(n && !strcmp(n, "0"))) setenv("VXRT_VR_PREDICT_VR", "1", 0); }
     }
     if (!strcmp(g_image, "GRIDLegends")) { void grid_profile_env(void); grid_profile_env(); }   // (GRID: grid_profile.m)
+    if (!strcmp(g_image, "GRIDLegends") && ![a containsObject:@"-present"]) g_vr = 0;   // (GRID: a floating window by default)
     if (!prog.count && !strcmp(g_image, "vxmac_test")) [prog addObjectsFromArray:@[ @"-seconds", @"60", @"-displaylink" ]];
     g_argc = (int)prog.count + 1;
     g_argv = calloc((size_t)g_argc + 1, sizeof *g_argv);
@@ -1182,8 +1183,10 @@ void vxmac_boot(void) {
     [_poll addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 - (void)attach {
-    CALayer *l = (__bridge CALayer *)vxkit_metal_layer();
-    if (!l || l.superlayer) return;
+    void *grid_metal_layer(void);   // (GRID: grid_profile.m - Feral's layer is on a child view)
+    CALayer *l = (__bridge CALayer *)(vxkit_metal_layer() ?: grid_metal_layer());
+    if (!l || l.superlayer == self.view.layer) return;
+    [l removeFromSuperlayer];   // (GRID: Feral's layer may sit in a child view's (never shown) layer)
     l.frame = self.view.bounds; l.contentsGravity = kCAGravityResizeAspect;
     [self.view.layer addSublayer:l];
     jlog("flat_layer", "\"w\":%.0f,\"h\":%.0f", l.bounds.size.width, l.bounds.size.height);

@@ -35,6 +35,9 @@ void grid_profile_env(void) {
     setenv("VXRT_VR_MODE", "screen", 0);            // the presenter's world-locked screen only: never head-driven VR
     setenv("VXMAC_GPU_WORKING_SET_MB", "4096", 0);  // the GPU budget the game is told (the app's limit is ~8 GB in all)
     setenv("GL_DISPLAY_HZ", "90", 0);               // CVDisplayLink stand-in (libglcv)
+    // (Metal's Mac1/Mac2 GPU families answered yes, as on the Mac the game was built for: the same M-series GPU says no
+    //  on visionOS, and Feral then chose another video format path whose colour planes came out scrambled; libvxmtl)
+    setenv("VXMAC_GPU_FAMILY_MAC", "1", 0);
 }
 
 static NSString *const kSeed =
@@ -96,4 +99,74 @@ NSString *grid_prepare_data(NSString *root) {
     setenv("GL_BUNDLE_PATH", root.UTF8String, 1);
     seed_preferences();
     return exe;
+}
+
+// The game's CAMetalLayer for the floating window (-present flat). VXpro looks only at the key window's content view;
+// Feral draws into a child view (CFeralMetalView), so the window's views are searched, depth first.
+#import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
+static CALayer *find_in_layer(CALayer *l, int depth) {
+    if (!l || depth > 8) return nil;
+    if ([l isKindOfClass:[CAMetalLayer class]]) return l;
+    for (CALayer *s in l.sublayers) { CALayer *m = find_in_layer(s, depth + 1); if (m) return m; }
+    return nil;
+}
+static CALayer *find_metal_layer(id view, int depth) {
+    if (!view || depth > 12) return nil;
+    if ([view respondsToSelector:@selector(layer)]) {
+        // (the view's own layer, or a CAMetalLayer the game added under it)
+        CALayer *l = find_in_layer(((id (*)(id, SEL))objc_msgSend)(view, @selector(layer)), 0);
+        if (l) return l;
+    }
+    if ([view respondsToSelector:@selector(subviews)])
+        for (id v in ((NSArray *(*)(id, SEL))objc_msgSend)(view, @selector(subviews))) {
+            CALayer *l = find_metal_layer(v, depth + 1);
+            if (l) return l;
+        }
+    return nil;
+}
+void *grid_metal_layer(void) {
+    // (libvxkit's NSApp, read only: calling +sharedApplication here would create a plain NSApplication before the game
+    //  makes its CFeralNSApplication, and the game would run with the wrong application object)
+    static __unsafe_unretained id *nsapp_p;
+    if (!nsapp_p) nsapp_p = (__unsafe_unretained id *)dlsym(RTLD_DEFAULT, "NSApp");
+    id nsapp = nsapp_p ? *nsapp_p : nil;
+    if (!nsapp) return NULL;
+    NSMutableArray *wins = [NSMutableArray array];
+    id key = [nsapp respondsToSelector:@selector(keyWindow)] ? ((id (*)(id, SEL))objc_msgSend)(nsapp, @selector(keyWindow)) : nil;
+    if (key) [wins addObject:key];
+    if ([nsapp respondsToSelector:@selector(windows)]) [wins addObjectsFromArray:((NSArray *(*)(id, SEL))objc_msgSend)(nsapp, @selector(windows)) ?: @[]];
+    for (id w in wins) {
+        id content = [w respondsToSelector:@selector(contentView)] ? ((id (*)(id, SEL))objc_msgSend)(w, @selector(contentView)) : nil;
+        CALayer *l = find_metal_layer(content, 0);
+        if (l) return (__bridge void *)l;
+    }
+    static int logged;
+    if (wins.count && !logged++) {   // (once, when there are windows: what they hold, if no layer is found)
+        for (id w in wins) {
+            id content = ((id (*)(id, SEL))objc_msgSend)(w, @selector(contentView));
+            NSArray *subs = content ? ((NSArray *(*)(id, SEL))objc_msgSend)(content, @selector(subviews)) : nil;
+            CALayer *cl = content ? ((id (*)(id, SEL))objc_msgSend)(content, @selector(layer)) : nil;
+            vxmac_log("GRID: window %s content %s layer %s sublayers %lu subviews %lu", class_getName([w class]),
+                      content ? class_getName([content class]) : "nil", cl ? class_getName([cl class]) : "nil",
+                      (unsigned long)cl.sublayers.count, (unsigned long)subs.count);
+            for (id v in subs) {
+                CALayer *vl = ((id (*)(id, SEL))objc_msgSend)(v, @selector(layer));
+                vxmac_log("GRID:   subview %s layer %s sublayers %lu", class_getName([v class]), vl ? class_getName([vl class]) : "nil", (unsigned long)vl.sublayers.count);
+            }
+        }
+    }
+    return NULL;
+}
+
+// (the floating window can be resized: the game's layer follows the window's view; added to host.m's
+//  VXMacRootController at load, since that class is generated from VXpro's source)
+#import <UIKit/UIKit.h>
+static void grid_layout(UIViewController *self, SEL _cmd) {
+    for (CALayer *l in self.view.layer.sublayers)
+        if ([l isKindOfClass:[CAMetalLayer class]]) l.frame = self.view.bounds;
+}
+__attribute__((constructor)) static void grid_window_layout(void) {
+    Class c = objc_getClass("VXMacRootController");
+    if (c) class_addMethod(c, @selector(viewDidLayoutSubviews), (IMP)grid_layout, "v@:");
 }

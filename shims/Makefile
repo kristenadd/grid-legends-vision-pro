@@ -14,7 +14,7 @@ KITLIB = $(OUT)/libglkit.dylib
 VXKIT = $(OUT)/libvxkit.dylib
 KIT = $(KITLIB) $(VXKIT)
 
-GL := libglkit libglcarbon libglcs libglcg libglsec libglcv libglal libglff libglcf libglfoundation libglavf libglcollab libglmtl libglappsvc libglsbridge libglsystem
+GL := libglkit libglcarbon libglcs libglcg libglsec libglcv libglal libglff libglcf libglfoundation libglavf libglcollab libglmtl libglappsvc libglsbridge libglsystem libgliokit libglwebkit libglca
 all: vxpro $(addprefix $(OUT)/,$(addsuffix .dylib,$(GL)))
 
 vxpro:
@@ -56,6 +56,15 @@ $(OUT)/libglappsvc.dylib $(OUT)/libglsbridge.dylib: glsmall.m | vxpro
 
 $(OUT)/libglsystem.dylib: glsystem.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glsystem.c -o $@ -Wl,-reexport_library,$(OUT)/libvxsystem.dylib $(KIT)
+
+$(OUT)/libgliokit.dylib: gliokit.c glcommon.h $(KITLIB)
+	$(CC) $(CFLAGS) $(DY) gliokit.c -o $@ -Wl,-reexport_library,$(OUT)/libvxiokit.dylib -framework IOKit -framework CoreFoundation $(KIT)
+
+$(OUT)/libglwebkit.dylib: glwebkit.m glcommon.h $(KITLIB)
+	$(CC) $(CFLAGS) $(DY) glwebkit.m -o $@ -Wl,-reexport_framework,WebKit -framework Foundation $(KIT)
+
+$(OUT)/libglca.dylib: glca.c glcommon.h $(KITLIB)
+	$(CC) $(CFLAGS) $(DY) glca.c -o $@ -Wl,-reexport_framework,CoreAudio -framework CoreFoundation $(KIT)
 
 clean:
 	rm -rf $(abspath ../build/xros) $(abspath ../build/xrsim)

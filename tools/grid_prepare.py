@@ -20,6 +20,7 @@ import macho_prepare  # noqa: E402
 GRID_SHIMMED = {
     'AppKit': '@rpath/libglkit.dylib',              # libvxkit + NSApplicationMain, alerts, panels, Touch Bar
     'Carbon': '@rpath/libglcarbon.dylib',           # Text Input Sources, Carbon event loop
+    'IOKit': '@rpath/libgliokit.dylib',             # libvxiokit + refused notification ports made quiet stand-ins
     'CoreGraphics': '@rpath/libglcg.dylib',         # libvxcg + events, gamma, display/window lists
     'Security': '@rpath/libglsec.dylib',            # libvxsec + legacy keychain
     'Metal': '@rpath/libglmtl.dylib',               # libvxmtl + device notifications
@@ -28,6 +29,8 @@ GRID_SHIMMED = {
     'CoreFoundation': '@rpath/libglcf.dylib',       # CFBundleGetMainBundle -> the game's bundle
     'Foundation': '@rpath/libglfoundation.dylib',   # NSUserNotificationCenter, +[NSBundle mainBundle] for the game
     'AVFoundation': '@rpath/libglavf.dylib',        # AVCaptureScreenInput
+    'CoreAudio': '@rpath/libglca.dylib',            # HasProperty / listeners without the HAL (VXpro answers the rest)
+    'WebKit': '@rpath/libglwebkit.dylib',           # WKWebView as is; the legacy WebView family as inert stand-ins
     'OpenAL': '@rpath/libglal.dylib',               # no device
     'ForceFeedback': '@rpath/libglff.dylib',        # no devices
     'Collaboration': '@rpath/libglcollab.dylib',    # CBIdentity

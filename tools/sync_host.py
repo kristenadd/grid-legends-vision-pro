@@ -7,9 +7,11 @@
 Every other host source is used from the submodule as it is (app/project.yml). The hooks, each an exact replacement
 that must match once (the script stops when VXpro's text changed, so the update is looked at by hand):
   1. the default image: GRIDLegends when its dylib is embedded;
-  2. GRID's launch defaults (grid_profile_env in app/Sources/grid_profile.m);
+  2. GRID's launch defaults (grid_profile_env in app/Sources/grid_profile.m) and a floating window instead of the
+     immersive space unless the launch says -present vr;
   3. Cyberpunk's UserSettings.json reading only for Cyberpunk;
-  4. GRID's data folder: Documents/GRIDLegends.app/Contents/Resources/Data (grid_prepare_data).
+  4. GRID's data folder: Documents/GRIDLegends.app/Contents/Resources/Data (grid_prepare_data);
+  5. the floating window finds the game's Metal layer in a child view too (grid_metal_layer).
 """
 import os, subprocess, sys
 
@@ -27,6 +29,7 @@ HOOKS = [
     # 2
     ('''    if (!prog.count && !strcmp(g_image, "vxmac_test"))''',
      '''    if (!strcmp(g_image, "GRIDLegends")) { void grid_profile_env(void); grid_profile_env(); }   // (GRID: grid_profile.m)
+    if (!strcmp(g_image, "GRIDLegends") && ![a containsObject:@"-present"]) g_vr = 0;   // (GRID: a floating window by default)
     if (!prog.count && !strcmp(g_image, "vxmac_test"))'''),
     # 3
     ('''            NSString *usPath = [lib stringByAppendingPathComponent:@"CD Projekt Red/Cyberpunk 2077/UserSettings.json"];
@@ -45,6 +48,15 @@ HOOKS = [
         } else if (!strcmp(g_image, "GRIDLegends")) {
             jlog("game_data", "\\"root\\":null,\\"looked_in\\":\\"%s/Contents/Resources/Data\\"", root.UTF8String);
         } else if ([NSFileManager.defaultManager fileExistsAtPath:[root stringByAppendingPathComponent:@"Contents/Data"] isDirectory:&dir] && dir) {'''),
+    # 5
+    ('''    CALayer *l = (__bridge CALayer *)vxkit_metal_layer();''',
+     '''    void *grid_metal_layer(void);   // (GRID: grid_profile.m - Feral's layer is on a child view)
+    CALayer *l = (__bridge CALayer *)(vxkit_metal_layer() ?: grid_metal_layer());'''),
+    ('''    if (!l || l.superlayer) return;
+    l.frame = self.view.bounds; l.contentsGravity = kCAGravityResizeAspect;''',
+     '''    if (!l || l.superlayer == self.view.layer) return;
+    [l removeFromSuperlayer];   // (GRID: Feral's layer may sit in a child view's (never shown) layer)
+    l.frame = self.view.bounds; l.contentsGravity = kCAGravityResizeAspect;'''),
 ]
 
 
