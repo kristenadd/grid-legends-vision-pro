@@ -437,6 +437,7 @@ static int present_hook(void *cb, void *tex, uint32_t w, uint32_t h) {
     if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }
     { void grid_burst(void *, void *, double); grid_burst(cb, tex, tn); }   // (GRID: grid_burst.m)
     { void grid_splash_frame(void *, void *); grid_splash_frame(cb, tex); }   // (GRID: grid_splash.m)
+    { void grid_stereo_frame(void *, void *, uint32_t, uint32_t); if (!g_vr) grid_stereo_frame(cb, tex, w, h); }   // (GRID: grid_stereo.m)
     if (!g_vr) return 1;                             // (flat: the layer is in the window, presented as usual)
     void *hud = vxmtl_hud_take();
     { void vx_xros_vr_set_hud_layer(void *); vx_xros_vr_set_hud_layer(hud); vxmtl_hud_want(vx_xros_vr_driving()); }   // (h33: this frame's HUD layer, or none)
@@ -1142,6 +1143,8 @@ void vxmac_boot(void) {
         vxmtl_set_present_hook(present_hook);
         if (g_vr) { vxmtl_set_pass_hook(pass_hook); vxmtl_set_target_hook(vxmac_vel_target);
                     vxkit_set_poll_hook(program_poll); }   // (h38: the head's delta at the game's poll)
+        else if (!strcmp(g_image, "GRIDLegends")) { void grid_stereo_depth_pass(void *, void *, int); int grid_stereo_enabled(void);
+                    if (grid_stereo_enabled()) vxmtl_set_pass_hook(grid_stereo_depth_pass); }   // (GRID: the window's stereo, grid_stereo.m)
         vx_xros_vr_enable(g_vr);
         input_setup();
         // the game's data, where its Mac bundle would have it

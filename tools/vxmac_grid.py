@@ -10,7 +10,7 @@
     tools/vxmac_grid.py launch  [--restart] [--present window|immersive] [--env NAME=VALUE ...]
                                 (default: a floating window you can move and resize; immersive: VXpro's screen in a space)
     tools/vxmac_grid.py pull    [--tag <t>]   the logs back into build/grid/logs/<t>
-    tools/vxmac_grid.py burst   [--tag <t>]   [--step N --frames N]  frames of the running game (default every 2nd, 120) as PNGs in build/grid/logs/<t>
+    tools/vxmac_grid.py burst   [--tag <t>]   [--step N --frames N | --eyes]  frames of the running game (default every 2nd, 120) as PNGs in build/grid/logs/<t>
     tools/vxmac_grid.py pref    [--set 'Path\\Name=value' ...] [--unset 'Path\\Name' ...] [--show <text>]   Feral's settings file on the headset
                                 (stops the game first; paths under HKEY_CURRENT_USER, e.g.
                                  'Software\\IndirectX\\Direct3D\\Config\\EnableF3DWarmer=0'; integers or text)
@@ -318,12 +318,14 @@ def cmd_burst(a):
     c = load_config()
     out = os.path.join(WORK, 'logs', a.tag or time.strftime('burst-%Y%m%d-%H%M%S')); os.makedirs(out, exist_ok=True)
     dom = ['--device', c['device'], '--domain-type', 'appDataContainer', '--domain-identifier', c['bundle_id']]
+    # (--eyes: the window's stereo instead - the two eyes, the frame and its depth, once; app/Sources/grid_stereo.m)
     with tempfile.NamedTemporaryFile('w', delete=False) as f: f.write('%d %d' % (a.step, a.frames)); req = f.name
-    devicectl(['device', 'copy', 'to'] + dom + ['--source', req, '--destination', 'Documents/grid_burst'])
+    devicectl(['device', 'copy', 'to'] + dom + ['--source', req, '--destination', 'Documents/' + ('grid_eyes' if a.eyes else 'grid_burst')])
     os.unlink(req)
-    say('burst asked for: waiting %d s' % a.wait); time.sleep(a.wait)
+    wait = min(a.wait, 4) if a.eyes else a.wait
+    say('%s asked for: waiting %d s' % ('eyes' if a.eyes else 'burst', wait)); time.sleep(wait)
     raw = os.path.join(out, 'raw')
-    devicectl(['device', 'copy', 'from'] + dom + ['--source', 'Documents/burst', '--destination', raw])
+    devicectl(['device', 'copy', 'from'] + dom + ['--source', 'Documents/' + ('eyes' if a.eyes else 'burst'), '--destination', raw])
     idx = os.path.join(raw, 'index.txt')
     if not os.path.exists(idx): sys.exit('no frames came back (is the game running and in front?)')
     run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'burst_png.swift'), raw, out])
@@ -394,6 +396,7 @@ def main():
     p.add_argument('--quiet', action='store_true', help='Release, no log files, snapshots or frame bursts (for playing)')
     p = sp.add_parser('burst'); p.add_argument('--tag'); p.add_argument('--wait', type=int, default=10)
     p.add_argument('--step', type=int, default=2, help='every Nth frame'); p.add_argument('--frames', type=int, default=120)
+    p.add_argument('--eyes', action='store_true', help="the window's stereo: both eyes, the frame and its depth, once")
     p = sp.add_parser('pref'); p.add_argument('--set', action='append', default=[]); p.add_argument('--show')
     p.add_argument('--unset', action='append', default=[])
     for name in ('install', 'copy', 'launch', 'pull'):

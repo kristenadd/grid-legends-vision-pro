@@ -14,6 +14,8 @@ that must match once (the script stops when VXpro's text changed, so the update 
   5. the floating window finds the game's Metal layer in a child view too (grid_metal_layer);
   6. a burst of frames on request (grid_burst in app/Sources/grid_burst.m; tools/vxmac_grid.py burst), and the
      splash watching for the game's first picture (grid_splash_frame in app/Sources/grid_splash.m);
+  6b. the window's stereo: each presented frame to grid_stereo.m (grid_stereo_frame), and (8) the game's render
+     passes' depth to it in the window (grid_stereo_depth_pass; VXpro's own pass hook is for its immersive presenter);
   7. a quiet build (GRID_QUIET, tools/vxmac_grid.py build --quiet): the logs go to /dev/null and no snapshots are taken.
 """
 import os, subprocess, sys
@@ -64,7 +66,8 @@ HOOKS = [
     ("""    if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }""",
      """    if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }
     { void grid_burst(void *, void *, double); grid_burst(cb, tex, tn); }   // (GRID: grid_burst.m)
-    { void grid_splash_frame(void *, void *); grid_splash_frame(cb, tex); }   // (GRID: grid_splash.m)"""),
+    { void grid_splash_frame(void *, void *); grid_splash_frame(cb, tex); }   // (GRID: grid_splash.m)
+    { void grid_stereo_frame(void *, void *, uint32_t, uint32_t); if (!g_vr) grid_stereo_frame(cb, tex, w, h); }   // (GRID: grid_stereo.m)"""),
     # 7
     ('''    snprintf(p, sizeof p, "%s/vxmac_host.jsonl", g_docs);
     g_log = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -78,6 +81,13 @@ HOOKS = [
     g_log = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     snprintf(p, sizeof p, "%s/vxmac_program.log", g_docs);
 #endif'''),
+    # 8
+    ('''        if (g_vr) { vxmtl_set_pass_hook(pass_hook); vxmtl_set_target_hook(vxmac_vel_target);
+                    vxkit_set_poll_hook(program_poll); }   // (h38: the head's delta at the game's poll)''',
+     '''        if (g_vr) { vxmtl_set_pass_hook(pass_hook); vxmtl_set_target_hook(vxmac_vel_target);
+                    vxkit_set_poll_hook(program_poll); }   // (h38: the head's delta at the game's poll)
+        else if (!strcmp(g_image, "GRIDLegends")) { void grid_stereo_depth_pass(void *, void *, int); int grid_stereo_enabled(void);
+                    if (grid_stereo_enabled()) vxmtl_set_pass_hook(grid_stereo_depth_pass); }   // (GRID: the window's stereo, grid_stereo.m)'''),
 ]
 
 

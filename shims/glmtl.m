@@ -9,8 +9,11 @@
 //   Feral marks cached resources volatile; under the headset's memory pressure the system may discard them, and the
 //   game reloads them (a texture blinking?). GL_NO_VOLATILE=1 keeps them non-volatile instead (nothing discarded; the
 //   memory then counts in the footprint).
+// - a log of every render pass of a few frames, on request (gl_passlog_start, from the host's stereo capture:
+//   tools/vxmac_grid.py burst --eyes): each colour attachment's and the depth's size, format, load and store actions.
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#include <pthread.h>
 #include <TargetConditionals.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -104,6 +107,76 @@ static void swap(Class c, SEL sel, IMP imp, IMP *orig) {
     else *orig = method_setImplementation(m, imp);
 }
 
+// ---- the render-pass log (a few frames, on request) ----
+static _Atomic int g_passlog;   // (frames still to log)
+static _Atomic int g_passlog_n;
+void gl_passlog_start(int frames) { atomic_store(&g_passlog_n, 0); atomic_store(&g_passlog, frames); vxmac_log("GRID Metal: render passes of the next %d frames:", frames); }
+void gl_passlog_frame(void) {   // (at each present)
+    int f = atomic_load(&g_passlog);
+    if (f <= 0) return;
+    vxmac_log("GRID Metal: --- present (%d passes)", atomic_load(&g_passlog_n));
+    atomic_store(&g_passlog_n, 0);
+    atomic_store(&g_passlog, f - 1);
+}
+static const char *act(int load, int store) {
+    static const char *L[] = { "D", "L", "C" }, *S[] = { "d", "s", "r", "sr", "u" };
+    static __thread char b[8]; snprintf(b, sizeof b, "%s%s", load >= 0 && load < 3 ? L[load] : "?", store >= 0 && store < 5 ? S[store] : "?"); return b;
+}
+// (the newest colour target of each size and format: the host's stereo reads the game's scene picture before its UI -
+//  1920x1080 RGBA8 - by identity; copied at the present, when the GPU has the frame's own contents in it)
+typedef struct { uint32_t w, h, f; __unsafe_unretained id tex; } gl_target;
+static gl_target g_targets[16]; static int g_ntargets; static pthread_mutex_t g_targets_l = PTHREAD_MUTEX_INITIALIZER;
+static NSMutableSet *g_target_keep;   // (the textures held, so a pointer above stays valid)
+static void note_target(id<MTLTexture> t) {
+    if (t.parentTexture) t = t.parentTexture;
+    if (t.width < 640) return;
+    if (t.pixelFormat == MTLPixelFormatBGRA8Unorm || t.pixelFormat == MTLPixelFormatBGRA8Unorm_sRGB) return;   // (drawables: not held)
+    pthread_mutex_lock(&g_targets_l);
+    int i = 0;
+    for (; i < g_ntargets; i++) if (g_targets[i].w == t.width && g_targets[i].h == t.height && g_targets[i].f == t.pixelFormat) break;
+    if (i == g_ntargets && g_ntargets < 16) g_ntargets++;
+    if (i < 16 && g_targets[i].tex != t) {
+        if (!g_target_keep) g_target_keep = [NSMutableSet set];
+        if (g_targets[i].tex) [g_target_keep removeObject:g_targets[i].tex];
+        [g_target_keep addObject:t];
+        g_targets[i] = (gl_target){ (uint32_t)t.width, (uint32_t)t.height, (uint32_t)t.pixelFormat, t };
+    }
+    pthread_mutex_unlock(&g_targets_l);
+}
+void *gl_frame_target(uint32_t w, uint32_t h, uint32_t format) {   // (a +0 reference; the texture stays alive in g_target_keep)
+    void *r = NULL;
+    pthread_mutex_lock(&g_targets_l);
+    for (int i = 0; i < g_ntargets; i++) if (g_targets[i].w == w && g_targets[i].h == h && g_targets[i].f == format) r = (__bridge void *)g_targets[i].tex;
+    pthread_mutex_unlock(&g_targets_l);
+    return r;
+}
+
+static IMP o_rce;
+static id h_rce(id self, SEL s, MTLRenderPassDescriptor *pd) {
+    if (pd && ![((id<MTLCommandBuffer>)self).commandQueue.label hasPrefix:@"GRID"]) for (int i = 0; i < 4; i++) { id<MTLTexture> t = pd.colorAttachments[i].texture; if (t && pd.colorAttachments[i].storeAction != MTLStoreActionDontCare) note_target(t); }
+    if (atomic_load(&g_passlog) > 0 && pd) {
+        char line[900]; int k = 0;
+        id<MTLCommandBuffer> cb = self;
+        k += snprintf(line + k, sizeof line - k, "GRID Metal: pass %d [%s]", atomic_fetch_add(&g_passlog_n, 1), cb.commandQueue.label.UTF8String ?: "");
+        for (int i = 0; i < 8; i++) {
+            MTLRenderPassColorAttachmentDescriptor *c = pd.colorAttachments[i];
+            if (!c.texture) continue;
+            k += snprintf(line + k, sizeof line - k, " c%d %lux%lu f%lu %s%s", i, (unsigned long)c.texture.width, (unsigned long)c.texture.height,
+                          (unsigned long)c.texture.pixelFormat, act((int)c.loadAction, (int)c.storeAction), c.texture.framebufferOnly ? "" : "");
+            if (k >= (int)sizeof line - 80) break;
+        }
+        if (pd.depthAttachment.texture)
+            k += snprintf(line + k, sizeof line - k, " | depth %lux%lu f%lu %s %p", (unsigned long)pd.depthAttachment.texture.width,
+                          (unsigned long)pd.depthAttachment.texture.height, (unsigned long)pd.depthAttachment.texture.pixelFormat,
+                          act((int)pd.depthAttachment.loadAction, (int)pd.depthAttachment.storeAction),
+                          (__bridge void *)(pd.depthAttachment.texture.parentTexture ?: pd.depthAttachment.texture));
+        if (pd.colorAttachments[0].texture)
+            k += snprintf(line + k, sizeof line - k, " | c0 %p", (__bridge void *)(pd.colorAttachments[0].texture.parentTexture ?: pd.colorAttachments[0].texture));
+        vxmac_log("%s", line);
+    }
+    return ((id (*)(id, SEL, id))o_rce)(self, s, pd);
+}
+
 __attribute__((constructor)) static void gl_mtl_init(void) {
     // (the descriptor the game allocates is MTLTextureDescriptor's concrete subclass; both are covered, each once)
     MTLTextureDescriptor *probe = [MTLTextureDescriptor new];
@@ -135,6 +208,10 @@ __attribute__((constructor)) static void gl_mtl_init(void) {
         dispatch_source_set_event_handler(t, ^{ purge_report(); });
         dispatch_resume(t);
         static dispatch_source_t keep; keep = t; (void)keep;
+        {   // (the render-pass log: the device's command buffer class)
+            id<MTLCommandQueue> q = [dev newCommandQueue]; id<MTLCommandBuffer> cb = [q commandBuffer];
+            if (cb) swap([cb class], @selector(renderCommandEncoderWithDescriptor:), (IMP)h_rce, &o_rce);
+        }
         if (no_volatile()) vxmac_log("GRID Metal: GL_NO_VOLATILE=1: resources the game marks volatile are kept non-volatile");
     }
 }

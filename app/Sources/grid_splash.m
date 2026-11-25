@@ -18,6 +18,8 @@ static int g_done, g_checking;   // (__atomic builtins)
 static unsigned long g_n;
 static double g_shown;
 static AVAudioPlayer *g_music;
+static int g_gone;   // (the splash faded out and removed)
+int grid_splash_done(void) { return g_gone; }
 
 static void hide(const char *why) {
     if (__atomic_exchange_n(&g_done, 1, __ATOMIC_SEQ_CST)) return;
@@ -29,7 +31,10 @@ static void hide(const char *why) {
             [m setVolume:0 fadeDuration:0.4];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 450 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ [m stop]; });
         }
-        [UIView animateWithDuration:0.4 animations:^{ v.alpha = 0; } completion:^(BOOL f) { (void)f; [v removeFromSuperview]; }];
+        [UIView animateWithDuration:0.4 animations:^{ v.alpha = 0; } completion:^(BOOL f) {
+            (void)f; UIView *root = v.superview; [v removeFromSuperview];
+            g_gone = 1; [root setNeedsLayout];   // (grid_profile.m then shows the stereo view, kept hidden until now)
+        }];
     });
 }
 

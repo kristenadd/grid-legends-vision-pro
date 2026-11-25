@@ -204,6 +204,19 @@ static void grid_layout(UIViewController *self, SEL _cmd) {
     { void grid_splash_show(UIView *); grid_splash_show(self.view); }   // (grid_splash.m: until the first video)
     for (CALayer *l in self.view.layer.sublayers)
         if ([l isKindOfClass:[CAMetalLayer class]]) l.frame = self.view.bounds;
+    // (grid_stereo.m, GridStereoView.swift: the picture in stereo over the game's layer, under the splash)
+    static UIView *stereo;
+    int grid_stereo_enabled(void); void *grid_stereo_make_view(void);
+    if (!stereo && grid_stereo_enabled()) {
+        stereo = (__bridge UIView *)grid_stereo_make_view();
+        stereo.layer.zPosition = 50;
+        stereo.userInteractionEnabled = NO;
+        stereo.hidden = YES;   // (until the splash is gone: RealityKit's plane draws in front of the window's views)
+        [self.view addSubview:stereo];
+        vxmac_log("GRID: the window shows the game in stereo (GRID_STEREO=0: flat)");
+    }
+    stereo.frame = self.view.bounds;
+    { int grid_splash_done(void); if (stereo.hidden && grid_splash_done()) stereo.hidden = NO; }
     // (visionOS turns a controller's buttons into pinches on the view you look at unless the view says it takes
     //  controller input itself: then every button goes to GameController only, and on to the game's virtual pad)
     BOOL has = NO;
