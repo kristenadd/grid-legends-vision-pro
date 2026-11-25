@@ -3,7 +3,8 @@
 
     tools/vxmac_grid.py prepare --team <TEAMID> [--game /Applications/GRIDLegends.app] [--bundle-id <id>] [--device <id>]
                                 the shims and the game's executable as a visionOS work copy; settings -> build/grid/config.json
-    tools/vxmac_grid.py build   [--splash image|title]  the host app signed with YOUR team, the work copy embedded
+    tools/vxmac_grid.py build   [--splash image|title] [--quiet]  the host app signed with YOUR team, the work copy embedded
+                                (--quiet: optimised, no log files, snapshots or frame bursts - for playing)
     tools/vxmac_grid.py install devicectl device install app (an update keeps the app's data: never uninstall)
     tools/vxmac_grid.py copy    the game's Info.plist, receipt and Resources (34 GB) into the app's container (resumable)
     tools/vxmac_grid.py launch  [--restart] [--present window|immersive] [--env NAME=VALUE ...]
@@ -61,8 +62,9 @@ def first_headset():
     return None
 
 
-def app_path():
-    return os.path.join(DD, 'Build', 'Products', 'Debug-xros', 'GRIDHost.app')
+def app_path():   # (the last build's: Debug, or Release for build --quiet)
+    conf = load_config().get('build_configuration', 'Debug') if os.path.exists(CONFIG) else 'Debug'
+    return os.path.join(DD, 'Build', 'Products', conf + '-xros', 'GRIDHost.app')
 
 
 # ---- prepare / build ---------------------------------------------------------------------------------------------------
@@ -109,9 +111,13 @@ def cmd_build(a):
         imageset('Splash', os.path.join(out, 'Splash.png')); imageset('SplashText', os.path.join(out, 'SplashText.png'))
     appdir = os.path.join(HERE, 'app')
     run(['xcodegen'], cwd=appdir)
-    run(['xcodebuild', '-project', 'GRIDHost.xcodeproj', '-scheme', 'GRIDHost', '-destination', 'generic/platform=visionOS',
-         '-derivedDataPath', DD, '-allowProvisioningUpdates', 'build', 'DEVELOPMENT_TEAM=' + c['team'],
-         'GRID_BUNDLE_ID=' + c['bundle_id']], cwd=appdir)
+    # --quiet: Release (optimised), and GRID_QUIET: no log files, snapshots or frame bursts (tools/sync_host.py hook 7)
+    conf = 'Release' if a.quiet else 'Debug'
+    run(['xcodebuild', '-project', 'GRIDHost.xcodeproj', '-scheme', 'GRIDHost', '-configuration', conf,
+         '-destination', 'generic/platform=visionOS', '-derivedDataPath', DD, '-allowProvisioningUpdates', 'build',
+         'DEVELOPMENT_TEAM=' + c['team'], 'GRID_BUNDLE_ID=' + c['bundle_id']]
+        + (['GCC_PREPROCESSOR_DEFINITIONS=$(inherited) GRID_QUIET=1'] if a.quiet else []), cwd=appdir)
+    c['build_configuration'] = conf; json.dump(c, open(CONFIG, 'w'), indent=1)
     app = app_path()
     if not os.path.exists(os.path.join(app, 'Frameworks', 'GRIDLegends.dylib')): sys.exit('not embedded: Frameworks/GRIDLegends.dylib')
     r = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', app], capture_output=True, text=True)
@@ -305,6 +311,7 @@ def main():
     p.add_argument('--bundle-id'); p.add_argument('--device')
     p = sp.add_parser('build'); p.add_argument('--splash', help='an image for the window while the game starts instead of the '
                                                'title screen (remembered; "title" goes back to the title screen)')
+    p.add_argument('--quiet', action='store_true', help='Release, no log files, snapshots or frame bursts (for playing)')
     p = sp.add_parser('burst'); p.add_argument('--tag'); p.add_argument('--wait', type=int, default=10)
     p.add_argument('--step', type=int, default=2, help='every Nth frame'); p.add_argument('--frames', type=int, default=120)
     p = sp.add_parser('pref'); p.add_argument('--set', action='append', default=[]); p.add_argument('--show')

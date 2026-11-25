@@ -3,6 +3,7 @@
 // (no IOKit notification port for apps); the game does not check and crashed in IONotificationPortGetRunLoopSource(NULL).
 // A failed port becomes a stand-in whose run loop source never fires: no USB devices arrive, no power events, which is
 // what a headset has anyway. Calls that succeed are passed through untouched.
+// IOServiceGetMatchingService answers the game's lookup of a virtual pad's service, for rumble (glrumble.m).
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
 #include <dlfcn.h>
@@ -63,4 +64,21 @@ CFRunLoopSourceRef IOPSNotificationCreateRunLoopSource(void (*cb)(void *), void 
     if (s) return s;
     gl_log_once("IOKit: IOPSNotificationCreateRunLoopSource refused -> a quiet source");
     return (CFRunLoopSourceRef)CFRetain(quiet_source());   // (the caller owns and releases it)
+}
+
+// (the game's lookup of a pad's service, for ForceFeedback: a virtual pad's stand-in, glrumble.m; anything else as asked)
+uint32_t gl_rumble_service(CFDictionaryRef matching);
+int gl_rumble_is_service(uint32_t s);
+io_service_t IOServiceGetMatchingService(mach_port_t main, CFDictionaryRef matching) {
+    uint32_t s = gl_rumble_service(matching);
+    if (s) { CFRelease(matching); return s; }   // (the call consumes one reference to the matching dictionary)
+    return ((io_service_t (*)(mach_port_t, CFDictionaryRef))real("IOServiceGetMatchingService"))(main, matching);
+}
+kern_return_t IOObjectRelease(io_object_t o) {
+    if (gl_rumble_is_service(o)) return KERN_SUCCESS;
+    return ((kern_return_t (*)(io_object_t))real("IOObjectRelease"))(o);
+}
+kern_return_t IOObjectRetain(io_object_t o) {
+    if (gl_rumble_is_service(o)) return KERN_SUCCESS;
+    return ((kern_return_t (*)(io_object_t))real("IOObjectRetain"))(o);
 }

@@ -14,6 +14,7 @@
 //   game's input value callback, and IOHIDDeviceGetValue answers the latest state; pads connecting and disconnecting
 //   are the manager's matching and removal callbacks.
 // Every IOHID function's first call is logged (the game's way of reading pads, for the next step).
+// Rumble: glrumble.m.
 // GL_PAD_LOG=1 logs the pad's button and hat changes.
 // A button press is reported for at least 100 ms (GL_PAD_MIN_PRESS_MS): the game polls the pad once a frame, and some
 // buttons (Menu) arrive from GameController as pulses shorter than a frame.
@@ -323,6 +324,14 @@ IOReturn_ IOHIDDeviceSetReport(void *dev, uint32_t type, CFIndex id, const uint8
 IOReturn_ IOHIDDeviceGetReport(void *dev, uint32_t type, CFIndex id, uint8_t *r, CFIndex *len) { L("IOHIDDeviceGetReport -> unsupported"); if (len) *len = 0; return kIOReturnUnsupported_; }
 void IOHIDDeviceRegisterInputReportCallback(void *dev, uint8_t *buf, CFIndex len, void *cb, void *ctx) { L("IOHIDDeviceRegisterInputReportCallback (raw reports: none)"); }
 uint32_t IOHIDDeviceGetService(void *dev) { L("IOHIDDeviceGetService -> none"); return 0; }
+
+// (glrumble.m: the GameController pad behind a virtual pad's LocationID, or nil)
+GCController *gl_hid_pad_for_location(long location) {
+    @synchronized (g_lock) {
+        for (GLHIDDevice *d in g_devices) if ([d->props[@"LocationID"] longValue] == location) return d->pad;
+    }
+    return nil;
+}
 
 // ---- IOHIDElement ----------------------------------------------------------------------------------------------------------
 #define E ((__bridge GLHIDElement *)elem)

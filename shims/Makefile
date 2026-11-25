@@ -39,8 +39,8 @@ $(OUT)/libglcv.dylib: glcv.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glcv.c -o $@ -Wl,-reexport_framework,CoreVideo -framework CoreFoundation $(KIT)
 $(OUT)/libglal.dylib: glal.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glal.c -o $@ $(KIT)
-$(OUT)/libglff.dylib: glff.c glcommon.h $(KITLIB)
-	$(CC) $(CFLAGS) $(DY) glff.c -o $@ $(KIT)
+$(OUT)/libglff.dylib: glff.c glcommon.h $(KITLIB) $(OUT)/libgliokit.dylib
+	$(CC) $(CFLAGS) $(DY) glff.c -o $@ -L$(OUT) -lgliokit $(KIT)
 $(OUT)/libglcf.dylib: glcf.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glcf.c -o $@ -Wl,-reexport_framework,CoreFoundation $(KIT)
 $(OUT)/libglfoundation.dylib: glfoundation.m glcommon.h $(KITLIB)
@@ -57,8 +57,8 @@ $(OUT)/libglappsvc.dylib $(OUT)/libglsbridge.dylib: glsmall.m | vxpro
 $(OUT)/libglsystem.dylib: glsystem.c glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glsystem.c -o $@ -Wl,-reexport_library,$(OUT)/libvxsystem.dylib $(KIT)
 
-$(OUT)/libgliokit.dylib: gliokit.c glhid.m glcommon.h $(KITLIB)
-	$(CC) $(CFLAGS) $(DY) gliokit.c glhid.m -o $@ -Wl,-reexport_library,$(OUT)/libvxiokit.dylib -framework IOKit -framework CoreFoundation -framework Foundation -framework GameController $(KIT)
+$(OUT)/libgliokit.dylib: gliokit.c glhid.m glrumble.m glcommon.h $(KITLIB)
+	$(CC) $(CFLAGS) $(DY) gliokit.c glhid.m glrumble.m -o $@ -Wl,-reexport_library,$(OUT)/libvxiokit.dylib -framework IOKit -framework CoreFoundation -framework Foundation -framework GameController -framework CoreHaptics $(KIT)
 
 $(OUT)/libglwebkit.dylib: glwebkit.m glcommon.h $(KITLIB)
 	$(CC) $(CFLAGS) $(DY) glwebkit.m -o $@ -Wl,-reexport_framework,WebKit -framework Foundation $(KIT)

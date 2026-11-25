@@ -18,6 +18,9 @@ static NSString *g_dir;
 static dispatch_queue_t g_q;
 
 void grid_burst(void *cbp, void *texp, double tn) {
+#ifdef GRID_QUIET
+    (void)cbp; (void)texp; (void)tn; return;   // (tools/vxmac_grid.py build --quiet: no bursts)
+#endif
     if (!g_left) {
         if (tn < g_next_check) return;
         g_next_check = tn + 0.5;

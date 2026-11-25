@@ -13,7 +13,8 @@ that must match once (the script stops when VXpro's text changed, so the update 
   4. GRID's data folder: Documents/GRIDLegends.app/Contents/Resources/Data (grid_prepare_data);
   5. the floating window finds the game's Metal layer in a child view too (grid_metal_layer);
   6. a burst of frames on request (grid_burst in app/Sources/grid_burst.m; tools/vxmac_grid.py burst), and the
-     splash watching for the game's first picture (grid_splash_frame in app/Sources/grid_splash.m).
+     splash watching for the game's first picture (grid_splash_frame in app/Sources/grid_splash.m);
+  7. a quiet build (GRID_QUIET, tools/vxmac_grid.py build --quiet): the logs go to /dev/null and no snapshots are taken.
 """
 import os, subprocess, sys
 
@@ -64,6 +65,19 @@ HOOKS = [
      """    if (g_snap_s > 0 && tn - g_snap_last >= g_snap_s) { g_snap_last = tn; snapshot((__bridge id<MTLCommandBuffer>)cb, (__bridge id<MTLTexture>)tex); }
     { void grid_burst(void *, void *, double); grid_burst(cb, tex, tn); }   // (GRID: grid_burst.m)
     { void grid_splash_frame(void *, void *); grid_splash_frame(cb, tex); }   // (GRID: grid_splash.m)"""),
+    # 7
+    ('''    snprintf(p, sizeof p, "%s/vxmac_host.jsonl", g_docs);
+    g_log = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    snprintf(p, sizeof p, "%s/vxmac_program.log", g_docs);''',
+     '''#ifdef GRID_QUIET   // (GRID: tools/vxmac_grid.py build --quiet - no log files, no snapshots)
+    snprintf(p, sizeof p, "/dev/null");
+    g_log = open(p, O_WRONLY);
+    g_snap_s = 0;
+#else
+    snprintf(p, sizeof p, "%s/vxmac_host.jsonl", g_docs);
+    g_log = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    snprintf(p, sizeof p, "%s/vxmac_program.log", g_docs);
+#endif'''),
 ]
 
 

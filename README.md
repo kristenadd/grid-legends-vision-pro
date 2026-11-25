@@ -28,6 +28,12 @@ python3 tools/vxmac_grid.py pull
 
 The last command copies the logs back to the Mac (`build/grid/logs/`).
 
+- For playing, build with `build --quiet`: an optimised build that writes no logs, saves no snapshots and polls for no
+  frame bursts. The logging build stutters every second or two. `pull` then has nothing to copy, and a plain `build`
+  brings the logging back.
+- Gamepads rumble on their haptics (`shims/glrumble.m`). The game queues its own HID rumble setup 11.6 days ahead, so
+  the shim runs it at once, in memory and only for the exact game build it was read from. `--env GL_RUMBLE=0` turns
+  rumble off, `GL_RUMBLE_SCALE` scales it and `GL_RUMBLE_LOG=1` logs the motor levels.
 - `copy` sends the game's data (about 34 GB), its Info.plist and **your own App Store receipt, unchanged** into the app's
   container. The game's activation check needs the receipt. Keep the headset awake and charging until `copy` finishes.
   If it stops, run it again and it resumes.

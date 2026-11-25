@@ -1210,9 +1210,15 @@ __attribute__((constructor)) static void host_init(void) {
         snprintf(a, sizeof a, "%s/%s.1", g_docs, logs[i]); snprintf(b, sizeof b, "%s/%s.2", g_docs, logs[i]); rename(a, b);
         snprintf(b, sizeof b, "%s/%s", g_docs, logs[i]); rename(b, a);
     }
+#ifdef GRID_QUIET   // (GRID: tools/vxmac_grid.py build --quiet - no log files, no snapshots)
+    snprintf(p, sizeof p, "/dev/null");
+    g_log = open(p, O_WRONLY);
+    g_snap_s = 0;
+#else
     snprintf(p, sizeof p, "%s/vxmac_host.jsonl", g_docs);
     g_log = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     snprintf(p, sizeof p, "%s/vxmac_program.log", g_docs);
+#endif
     int fd = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) { dup2(fd, 1); dup2(fd, 2); close(fd); setvbuf(stdout, NULL, _IOLBF, 0); }
     vxmac_set_log_sink(shim_line);
