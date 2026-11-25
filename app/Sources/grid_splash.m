@@ -5,7 +5,10 @@
 //   grid_splash_show(view)       from the window controller's layout (grid_profile.m), once
 //   grid_splash_frame(cb, tex)   from host.m's present hook (tools/sync_host.py), every frame until the splash is gone:
 //                                every 6th frame is read back and every 8th pixel of every 8th row looked at
+// The title screen's song ("SplashMusic", from the game's soundbanks: tools/vxmac_grid.py build) loops while it shows and
+// fades out with it.
 #import <UIKit/UIKit.h>
+#import <AVFoundation/AVFoundation.h>
 #import <Metal/Metal.h>
 
 void vxmac_log(const char *fmt, ...);
@@ -14,12 +17,18 @@ static UIView *g_splash;
 static int g_done, g_checking;   // (__atomic builtins)
 static unsigned long g_n;
 static double g_shown;
+static AVAudioPlayer *g_music;
 
 static void hide(const char *why) {
     if (__atomic_exchange_n(&g_done, 1, __ATOMIC_SEQ_CST)) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIView *v = g_splash; g_splash = nil;
         vxmac_log("GRID: splash off (%s, %.1f s after it showed)", why, CACurrentMediaTime() - g_shown);
+        AVAudioPlayer *m = g_music; g_music = nil;
+        if (m) {
+            [m setVolume:0 fadeDuration:0.4];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 450 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{ [m stop]; });
+        }
         [UIView animateWithDuration:0.4 animations:^{ v.alpha = 0; } completion:^(BOOL f) { (void)f; [v removeFromSuperview]; }];
     });
 }
@@ -94,6 +103,13 @@ void grid_splash_show(UIView *root) {
     [pulsing.layer addAnimation:a forKey:@"pulse"];
     [root addSubview:s];
     g_splash = s; g_shown = CACurrentMediaTime();
+    NSDataAsset *song = [[NSDataAsset alloc] initWithName:@"SplashMusic"];
+    if (song) {
+        NSError *err = nil;
+        g_music = [[AVAudioPlayer alloc] initWithData:song.data error:&err];
+        g_music.numberOfLoops = -1;   // (the song loops whole, as the game plays it)
+        if (![g_music play]) { vxmac_log("GRID: splash music did not play: %s", err.localizedDescription.UTF8String ?: "?"); g_music = nil; }
+    }
     vxmac_log("GRID: splash on (%s)", img && word ? "the loading screen" : img ? "with the Splash image" : "no Splash image in the app: plain");
     // (never stuck: off after 3 minutes whatever the frames say)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 180 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ hide("timeout"); });

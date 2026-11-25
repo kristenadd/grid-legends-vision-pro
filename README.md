@@ -43,6 +43,8 @@ The last command copies the logs back to the Mac (`build/grid/logs/`).
   race loads. `tools/vxmac_grid.py pref --show <text>` / `--set` / `--unset` change Feral's settings on the headset.
 - The window shows the game's title screen until its first video, with "LOADING" in the game's own font where
   "PRESS (A)" goes. `build` makes it from the game's own files (`tools/make_loading.swift`), so nothing needs capturing.
+  The title screen's own song loops under it and fades out when the video starts. `build` decodes it from the game's
+  soundbanks with `vgmstream-cli` (`brew install vgmstream`); without that tool the splash is silent.
   `build --splash <image>` uses any image instead, with "Loading..." under it (remembered; `--splash title` goes back). The app's icon is made at build time from the game's own (`tools/make_icon.swift`).
 - Your game files, the prepared executable, the icon, the splash and the receipt stay on your Mac and headset. Nothing of
   the game goes into git.

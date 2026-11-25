@@ -109,6 +109,7 @@ def cmd_build(a):
         out = os.path.join(WORK, 'loading')
         run(['xcrun', 'swift', os.path.join(HERE, 'tools', 'make_loading.swift'), c['game'], out])
         imageset('Splash', os.path.join(out, 'Splash.png')); imageset('SplashText', os.path.join(out, 'SplashText.png'))
+    splash_music(c['game'], cat)
     appdir = os.path.join(HERE, 'app')
     run(['xcodegen'], cwd=appdir)
     # --quiet: Release (optimised), and GRID_QUIET: no log files, snapshots or frame bursts (tools/sync_host.py hook 7)
@@ -124,6 +125,85 @@ def cmd_build(a):
     for e in ('com.apple.developer.kernel.increased-memory-limit', 'com.apple.developer.kernel.extended-virtual-addressing'):
         if e not in r.stdout: sys.exit('the signed app lacks %s (a paid team is needed)' % e)
     say('built: %s (signed by your team; do not share it: it contains the game\'s code)' % app)
+
+
+def splash_music(game, cat):
+    """The title screen's song (the game's Wwise stream Music_FE_Boot_Start_Screen_Loop, which loops whole) as the
+    "SplashMusic" data asset, looped under the splash (app/Sources/grid_splash.m). Decoded with vgmstream-cli
+    (brew install vgmstream) into Apple Lossless, so the loop has no gap; without vgmstream the splash is silent."""
+    ds = os.path.join(cat, 'SplashMusic.dataset')
+    shutil.rmtree(ds, ignore_errors=True)
+    banks = os.path.join(game, 'Contents', 'Resources', 'Data', 'data_win', 'audio', 'soundbanks')
+    try: info = open(os.path.join(banks, 'soundbanksinfo.xml'), encoding='utf-8', errors='replace').read()
+    except OSError: say('splash music: no soundbanksinfo.xml in the game: silent splash'); return
+    m = re.search(r'<File Id="(\d+)"[^>]*>\s*<ShortName>Music_FE_Boot_Start_Screen_Loop[^<]*</ShortName>', info)
+    wem = m and os.path.join(banks, 'streams', m.group(1) + '.wem')
+    if not wem or not os.path.exists(wem): say('splash music: the title song is not in the game\'s soundbanks: silent splash'); return
+    tool = shutil.which('vgmstream-cli')
+    if not tool: say('splash music: skipped - vgmstream-cli is not installed (brew install vgmstream): silent splash'); return
+    out = os.path.join(WORK, 'loading'); os.makedirs(out, exist_ok=True)
+    wav, caf = os.path.join(out, 'music.wav'), os.path.join(out, 'music.caf')
+    run([tool, '-o', wav, wem])
+    exit_ms = music_exit_ms(banks, int(m.group(1)))
+    if exit_ms: loop_at(wav, exit_ms)
+    else: say('splash music: no exit cue found in the music banks: the whole stream loops')
+    run(['afconvert', '-f', 'caff', '-d', 'alac', wav, caf])
+    os.makedirs(ds)
+    shutil.copy(caf, os.path.join(ds, 'music.caf'))
+    json.dump({'data': [{'filename': 'music.caf', 'idiom': 'universal', 'universal-type-identifier': 'com.apple.coreaudio-format'}],
+               'info': {'author': 'xcode', 'version': 1}}, open(os.path.join(ds, 'Contents.json'), 'w'))
+
+
+def music_exit_ms(banks, source_id):
+    """The exit cue (ms) of the Wwise music segment that plays the stream: the game starts the next repeat there, while
+    the stream's tail (its reverb, past the cue) still plays. From the soundbanks' HIRC: the music track (type 0x0B)
+    naming the source, the music segment (0x0A) naming the track, and its markers (entry, exit: id, position as a
+    double in ms, name)."""
+    import glob, struct
+    src = struct.pack('<I', source_id)
+    for f in sorted(glob.glob(os.path.join(banks, '*.bnk'))):
+        d = open(f, 'rb').read()
+        if src not in d: continue
+        i = 0
+        while i + 8 <= len(d):
+            tag, n = d[i:i + 4], struct.unpack('<I', d[i + 4:i + 8])[0]
+            if tag == b'HIRC':
+                j, objs = i + 12, []
+                for _ in range(struct.unpack('<I', d[i + 8:i + 12])[0]):
+                    t, ln = d[j], struct.unpack('<I', d[j + 1:j + 5])[0]
+                    objs.append((t, d[j + 5:j + 5 + ln])); j += 5 + ln
+                for t, b in objs:
+                    if t != 0x0B or src not in b: continue
+                    tid = b[:4]
+                    for t2, seg in objs:
+                        if t2 != 0x0A or tid not in seg[4:]: continue
+                        for k in range(len(seg) - 4):   # (the markers end the segment's data)
+                            c, p, marks = struct.unpack('<I', seg[k:k + 4])[0], k + 4, []
+                            if not 2 <= c <= 8: continue
+                            for _ in range(c):
+                                if p + 16 > len(seg): break
+                                pos, sl = struct.unpack('<d', seg[p + 4:p + 12])[0], struct.unpack('<I', seg[p + 12:p + 16])[0]
+                                if not 0 <= pos < 600000 or sl > 64: break
+                                marks.append(pos); p += 16 + sl
+                            if len(marks) == c and p == len(seg) and marks[-1] > 0: return marks[-1]
+            i += 8 + n
+    return None
+
+
+def loop_at(wav, exit_ms):
+    """The stream as one seamless repeat of exit_ms: what follows the cue (the tail) is mixed into the start, as it
+    sounds when the game repeats the segment."""
+    import array, wave
+    w = wave.open(wav); ch, rate, width, n = w.getnchannels(), w.getframerate(), w.getsampwidth(), w.getnframes()
+    if width != 2: w.close(); return
+    a = array.array('h'); a.frombytes(w.readframes(n)); w.close()
+    L = int(round(exit_ms * rate / 1000.0))
+    if not 0 < L < n: return
+    out = array.array('h', a[:L * ch])
+    for i in range(min(len(a) - L * ch, L * ch)):
+        out[i] = max(-32768, min(32767, out[i] + a[L * ch + i]))
+    o = wave.open(wav, 'wb'); o.setnchannels(ch); o.setsampwidth(2); o.setframerate(rate); o.writeframes(out.tobytes()); o.close()
+    say('splash music: loops at the exit cue, %.3f s (the tail mixed into the start)' % (L / rate))
 
 
 # ---- install / copy ---------------------------------------------------------------------------------------------------
