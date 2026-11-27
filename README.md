@@ -6,6 +6,10 @@ controller. The game's own Apple-silicon code runs natively on the headset. Ther
 This is built on [VXpro](https://github.com/Ag3497120/VXpro) (included as a submodule in `third_party/VXpro`), which does
 the same for Cyberpunk 2077. The plan and phase notes are in [PLAN.md](PLAN.md) and [docs/](docs/).
 
+This is an unofficial fan project, not affiliated with or endorsed by Codemasters, Electronic Arts or Feral
+Interactive. GRID Legends and its names are their trademarks. No game files are included: you need your own copy of
+the game from the Mac App Store.
+
 ## Status
 
 Playable on Apple Vision Pro: menus and full races (tested in November 2026 with an Xbox Wireless Controller).
@@ -24,7 +28,11 @@ Known limits:
 - The logging build stutters every second or two. Build with `--quiet` for playing.
 - The visionOS simulator only gets as far as the game's window opening (see below).
 
-Not planned for now: stereo 3D and head tracking.
+Not planned for now:
+- Stereo 3D. It was tried in November 2026 and set aside because it was uncomfortable to play. Each eye's picture
+  was shifted using the game's depth, but the depth didn't always line up with the picture (ghosting on cars), and
+  the HUD was shifted along with the scene. The work-in-progress is on the `wip/stereo-3d` branch.
+- Head tracking.
 
 ## What you need
 
@@ -75,7 +83,7 @@ After `copy`, open GRID Legends from the headset's home view, or run `launch` fr
 simulator's Metal stops the game after its window opens ([docs/PHASE1.md](docs/PHASE1.md)), so it's only for start-up
 checks.
 
-## Licence
+## License
 
-This repository's code: see VXpro's MIT licence for the parts derived from it. Not affiliated with Codemasters, Electronic
-Arts or Feral Interactive.
+The code in this repository is under the [MIT License](LICENSE). VXpro, in `third_party/VXpro`, has its own MIT
+License. GRID Legends itself is not covered: it stays the property of its owners.
