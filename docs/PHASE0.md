@@ -9,7 +9,7 @@ SHA-256 `73e7a8fe7741b07ab36128dcea1a7ca890a45a7255d6d4b463bddcebb662004e`. Repr
 | Gate | Result |
 |---|---|
 | Converted game loads | **Pass.** `macho_prepare.py --as-dylib` (macOS platform) → `dyhost_mac -n`: all fixups and C++ initializers ran. entry_offset 65472 (0xFFC0). |
-| Receipt / licence | **Pass on the Mac only** (see [Phase 1](PHASE1.md): Feral's online activation fails in the visionOS simulator, `_Exit(173)`). Run from a stand-in bundle (`com.example.gridtest`, no `_MASReceipt`, ad-hoc signed): launcher → title screen → "No save game found, create one?". No licence prompt, no exit. |
+| Receipt / license | **Pass on the Mac only** (see [Phase 1](PHASE1.md): Feral's online activation fails in the visionOS simulator, `_Exit(173)`). Run from a stand-in bundle (`com.example.gridtest`, no `_MASReceipt`, ad-hoc signed): launcher → title screen → "No save game found, create one?". No license prompt, no exit. |
 | Large memory reservations | **No pool patch needed (provisional).** See below. |
 
 ## Receipt: what the code does

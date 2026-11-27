@@ -96,11 +96,11 @@ so far. **Correction (Phase 1):** on the Mac the game could still reach your rea
 simulator Feral's activation check fails and the game exits with 173 ([Phase 1](docs/PHASE1.md)). New item for Phase 1: skip Feral's pre-game launcher (`GameOptionsDialogShouldShow = 0`).
 In-race memory is still to be measured.
 
-1. **Receipt / licence behaviour.** The binary reads `appStoreReceiptURL` and carries PKCS7 receipt OIDs.
+1. **Receipt / license behaviour.** The binary reads `appStoreReceiptURL` and carries PKCS7 receipt OIDs.
    Find out (static: who calls `appStoreReceiptURL` and what happens on failure; dynamic: run a re-signed
    copy on the Mac via `dyhost_mac`) whether the game exits, nags, or carries on when the receipt does not
    validate outside its original bundle. **If it refuses to run, stop and decide.** This plan does not
-   include patching out licence checks.
+   include patching out license checks.
 2. **Memory reservations.** Run the game on the Mac and check `vmmap`/VXpro's reservation logging for
    large fixed reservations (Cyberpunk needed a pool patch because a 64 GB reservation failed on the
    headset). GRID's Mac minimum spec is 8 GB, so this may not be needed.
@@ -178,7 +178,7 @@ Virtual Addressing). Game files never go in git or releases.
 
 | Risk | Likelihood | Mitigation / decision |
 |---|---|---|
-| Feral activation blocks startup | **Solved in Phase 1** with your own unmodified receipt in the redirected bundle ([details](docs/PHASE1.md)); without it `_Exit(173)` | Copy the receipt with the data in Phase 2; never patch or spoof licence checks |
+| Feral activation blocks startup | **Solved in Phase 1** with your own unmodified receipt in the redirected bundle ([details](docs/PHASE1.md)); without it `_Exit(173)` | Copy the receipt with the data in Phase 2; never patch or spoof license checks |
 | Feral pre-game launcher (AppKit + WebKit) | Certain | Seed `GameOptionsDialogShouldShow = 0` before first launch |
 | IOHID-only controller support | Solved (Phase 3) | Virtual HID pad; the window claims controller input |
 | Run-time-only AppKit/Feral UI calls (alerts, launcher-style dialogs, WebView UI) | High | libvxkit catch-all logs; implement what is hit |

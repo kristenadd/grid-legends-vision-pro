@@ -40,7 +40,7 @@ read your real installation's activation record (the game imports the legacy key
 `SecKeychainFindGenericPassword`/`AddGenericPassword`). On visionOS none of that exists: no keychain item, no
 receipt in the host app, a different device, and DeviceCheck/App Attest tied to a different app and team.
 
-The plan does not include patching out or spoofing licence checks (for example faking the Mac's hardware identity or
+The plan does not include patching out or spoofing license checks (for example faking the Mac's hardware identity or
 copying an activation record to pass the check).
 
 ### Result with your own receipt (decided 2026-11-23)
